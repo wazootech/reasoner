@@ -4,12 +4,42 @@ An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 [`@wazoo/sparql-engine`](https://github.com/wazootech/sparql-engine).
 
 **Status: in development, unreleased.** The OWL 2 RL ruleset, the semi-naive
-engine, `owl:sameAs` as a union-find, and incremental additions (`extend`) work,
-and `deno task test:parity <file.nt ...>` compares the closure with the Wiki's
-current engine. The W3C conformance suite and CI are not wired up yet. The plan
-is [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
+engine, `owl:sameAs` as a union-find, and incremental additions (`extend`) work.
+Retraction is not implemented yet. The plan is
+[wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
 evidence for it is in
 [wazootech/wiki#414](https://github.com/wazootech/wiki/issues/414).
+
+## Usage
+
+```ts
+import { Reasoner } from "@wazoo/reasoner";
+
+const reasoner = new Reasoner();
+reasoner.add(quads); // any RDF/JS triples; the graph term is ignored
+reasoner.run();
+for (const quad of reasoner.closure("application")) store.add(quad);
+reasoner.inconsistencies(); // [{ rule: "cax-dw", terms: [...] }, ...]
+
+// Later: reason about a change against the closure already computed.
+const added = reasoner.extend(moreQuads, "application");
+```
+
+`closure("complete")` lists every entailed triple. `"application"` leaves out
+what a graph store has no use for: literal subjects, reflexive `owl:sameAs`,
+complement-class skolems, and types whose class is a blank node.
+
+## Testing
+
+- `deno task ci`: format, lint, type-check, unit tests.
+- `deno task test:parity`: the closure against the Wiki's current engine
+  (`rdfjs-inference-engine`), triple for triple, on the corpora in
+  `test/parity/corpora/`. Every difference must be a documented divergence.
+- `deno task test:w3c`: the W3C OWL 2 RL test cases (approved and proposed),
+  fetched from w3.org into `.cache/`. A test in `test/w3c/expected-pass.json`
+  that fails is a regression; `deno task test:w3c:update` records new passes.
+- `deno task bench`: closure time and memory on synthetic graphs
+  (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
 
 ## Why
 
@@ -36,6 +66,6 @@ Worlds needs to reason about a change (Δ) against an existing closure.
 
 ## Relationship to `sparql-engine`
 
-A separate package that depends on `@wazoo/sparql-engine`'s term model and
-store. Querying and reasoning have different specifications, test suites, and
-release cadences, so neither forces a release of the other.
+A separate package that depends on `@wazoo/sparql-engine`'s term model. Querying
+and reasoning have different specifications, test suites, and release cadences,
+so neither forces a release of the other.

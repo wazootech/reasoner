@@ -15,7 +15,8 @@
     "@rdfjs/types": "npm:@rdfjs/types@^2.0.1",
     "@std/assert": "jsr:@std/assert@^1.0.19",
     "@wazoo/sparql-engine": "jsr:@wazoo/sparql-engine@0.4.4",
-    "rdfjs-inference-engine": "npm:rdfjs-inference-engine@0.2.2"
+    "rdfjs-inference-engine": "npm:rdfjs-inference-engine@0.2.2",
+    "rdfxml-streaming-parser": "npm:rdfxml-streaming-parser@3.1.0"
   },
   "tasks": {
     "ci": {
@@ -27,6 +28,8 @@
     "fmt:check": "deno fmt --check",
     "lint": "deno lint",
     "test": "deno test --allow-read src/ test/unit/",
+    "test:w3c": "deno run --allow-read --allow-write=.cache --allow-net=www.w3.org --allow-env test/w3c/run.ts",
+    "test:w3c:update": "deno run --allow-read --allow-write=.cache,test/w3c/expected-pass.json --allow-net=www.w3.org --allow-env test/w3c/run.ts --update",
     "test:parity": "deno run --allow-read --allow-env test/parity/parity.ts",
     "bench": "deno run --allow-read --allow-hrtime bench/scaling.ts",
     "publish:dry": "deno publish --dry-run --allow-dirty"
