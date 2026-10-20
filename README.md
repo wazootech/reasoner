@@ -3,8 +3,13 @@
 An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 [`@wazoo/sparql-engine`](https://github.com/wazootech/sparql-engine).
 
-**Status: planned. There is no code yet.** The plan and the evidence for it
-are in [wazootech/wiki#414](https://github.com/wazootech/wiki/issues/414).
+**Status: in development, unreleased.** The OWL 2 RL ruleset, the semi-naive
+engine, `owl:sameAs` as a union-find, and incremental additions (`extend`) work,
+and `deno task test:parity <file.nt ...>` compares the closure with the Wiki's
+current engine. The W3C conformance suite and CI are not wired up yet. The plan
+is [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
+evidence for it is in
+[wazootech/wiki#414](https://github.com/wazootech/wiki/issues/414).
 
 ## Why
 
