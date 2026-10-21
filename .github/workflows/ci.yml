@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task ci
+      - run: deno task publish:dry
+  # Triple-for-triple parity with the Wiki's current engine
+  # (rdfjs-inference-engine) on the committed public corpora. Every
+  # difference must be one of the divergences test/parity/parity.ts documents.
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task test:parity
+  # W3C OWL 2 RL conformance. The manifests are fetched from w3.org (not
+  # vendored) and cached; a test listed in test/w3c/expected-pass.json that
+  # fails is a regression.
+  w3c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: actions/cache@v4
+        with:
+          path: .cache/owl2rl
+          key: owl2rl-manifests-${{ hashFiles('test/w3c/run.ts') }}
+      - run: deno task test:w3c
