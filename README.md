@@ -3,9 +3,12 @@
 An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 [`@wazoo/sparql-engine`](https://github.com/wazootech/sparql-engine).
 
-**Status: in development, unreleased.** The OWL 2 RL ruleset, the semi-naive
-engine, `owl:sameAs` as a union-find, and incremental additions (`extend`) work.
-Retraction is not implemented yet. The plan is
+**Status: 0.1.0, published to JSR (2026-10-21).** The OWL 2 RL ruleset, the
+semi-naive engine, `owl:sameAs` as a union-find, and incremental additions
+(`extend`) work. Retraction is not implemented yet, and the Worlds integration
+has not started. The Wiki's switch from `rdfjs-inference-engine` to this package
+is pending merge in
+[wazootech/wiki#418](https://github.com/wazootech/wiki/pull/418). The plan is
 [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
 evidence for it is in
 [wazootech/wiki#414](https://github.com/wazootech/wiki/issues/414).
@@ -40,6 +43,18 @@ complement-class skolems, and types whose class is a blank node.
   that fails is a regression; `deno task test:w3c:update` records new passes.
 - `deno task bench`: closure time and memory on synthetic graphs
   (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
+
+## Conformance
+
+- **W3C OWL 2 RL suite** (`deno task test:w3c`): 81 of 90 pass. Four have no
+  RDF/XML premise and one imports another ontology. Four conclusions are not
+  entailed: `WebOnt-equivalentClass-008-Direct`, `WebOnt-I4.6-005-Direct`,
+  `WebOnt-I5.26-010`, and `WebOnt-I5.5-005`. `rdfjs-inference-engine` fails the
+  same four, so they are known gaps, not regressions.
+- **Parity with `rdfjs-inference-engine`** (`deno task test:parity`): identical
+  closures on `bench-1e3`, `docs`, `micro`, and `owl-nosame`. On `owl` this
+  package derives two extra triples, a documented divergence (`eq-rep` applied
+  to an ontology triple).
 
 ## Why
 
