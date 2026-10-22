@@ -7,16 +7,27 @@ import { Reasoner } from "@/mod.ts";
 
 const E = "http://d.example/";
 const OWL = "http://www.w3.org/2002/07/owl#";
+const XSD = "http://www.w3.org/2001/XMLSchema#";
+const RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const RDFS = "http://www.w3.org/2000/01/rdf-schema#";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
 /** T3 is a plain [s, p, o] of short names, easy to print and shrink. */
 export type T3 = readonly [string, string, string];
 
-const INDIVIDUALS = ["i0", "i1", "i2", "i3", "i4"];
+const INDIVIDUALS = ["i0", "i1", "i2", "i3", "i4", "_:b0", "_:b1"];
 const CLASSES = ["C0", "C1", "C2"];
 const PROPS = ["p0", "p1", "p2", "p3"];
-const LITERALS = ['"1"', '"2"'];
+// Plain, typed (including numerically equal ones), and language-tagged.
+const LITERALS = [
+  '"1"',
+  '"2"',
+  '"1"^^xsd:integer',
+  '"01"^^xsd:integer',
+  '"1"^^xsd:decimal',
+  '"a"@en',
+  '"a"@fr',
+];
 const PROP_KINDS = [
   "FunctionalProperty",
   "InverseFunctionalProperty",
@@ -25,7 +36,24 @@ const PROP_KINDS = [
   "IrreflexiveProperty",
   "AsymmetricProperty",
 ];
-const OWL_NAMES = ["sameAs", "differentFrom", "inverseOf", ...PROP_KINDS];
+const OWL_NAMES = [
+  "sameAs",
+  "differentFrom",
+  "inverseOf",
+  "equivalentClass",
+  "hasKey",
+  "someValuesFrom",
+  "allValuesFrom",
+  "onProperty",
+  "onClass",
+  "maxCardinality",
+  "maxQualifiedCardinality",
+  "intersectionOf",
+  "unionOf",
+  "propertyChainAxiom",
+  ...PROP_KINDS,
+];
+const RDF_NAMES = ["first", "rest", "nil"];
 const RDFS_NAMES = ["subClassOf", "domain", "range", "subPropertyOf"];
 
 /** prng is mulberry32, a tiny seeded generator. */
@@ -46,10 +74,71 @@ export function generate(seed: number): T3[] {
   const pick = <X>(xs: readonly X[]): X => xs[Math.floor(rnd() * xs.length)]!;
   const n = 10 + Math.floor(rnd() * 31);
   const out = new Map<string, T3>();
+  let fresh = 0;
+  const add = (...ts: T3[]) => ts.forEach((t) => out.set(t.join(" "), t));
+  /** list adds an RDF list of the members and returns its head. */
+  const list = (members: string[]): string => {
+    const id = fresh++;
+    members.forEach((m, i) => {
+      add([`_:l${id}_${i}`, "first", m]);
+      add([
+        `_:l${id}_${i}`,
+        "rest",
+        i + 1 < members.length ? `_:l${id}_${i + 1}` : "nil",
+      ]);
+    });
+    return `_:l${id}_0`;
+  };
+  /** structure adds list-based axioms and restrictions. */
+  const structure = () => {
+    const k = Math.floor(rnd() * 8);
+    const c = pick(CLASSES);
+    const p = pick(PROPS);
+    const restriction = () => `_:r${fresh++}`;
+    if (k === 0) {
+      add([
+        c,
+        "hasKey",
+        list([p, pick(PROPS)].slice(0, 1 + Math.floor(rnd() * 2))),
+      ]);
+    } else if (k === 1) {
+      add([c, "intersectionOf", list([pick(CLASSES), pick(CLASSES)])]);
+    } else if (k === 2) {
+      add([c, "unionOf", list([pick(CLASSES), pick(CLASSES)])]);
+    } else if (k === 3) {
+      add([
+        p,
+        "propertyChainAxiom",
+        list([pick(PROPS), pick(PROPS), ...(rnd() < 0.3 ? [pick(PROPS)] : [])]),
+      ]);
+    } else {
+      const r = restriction();
+      add([r, "onProperty", p]);
+      const dir = rnd();
+      if (k === 4) {
+        add([r, "someValuesFrom", pick(CLASSES)]);
+        add(dir < 0.5 ? [r, "subClassOf", c] : [c, "subClassOf", r]);
+      } else if (k === 5) {
+        add([r, "allValuesFrom", pick(CLASSES)]);
+        add(dir < 0.5 ? [c, "subClassOf", r] : [r, "subClassOf", c]);
+      } else if (k === 6) {
+        add([r, "maxCardinality", '"1"^^xsd:nonNegativeInteger']);
+        add([pick(INDIVIDUALS), "a", r]);
+      } else {
+        add([r, "maxQualifiedCardinality", '"1"^^xsd:nonNegativeInteger']);
+        add([r, "onClass", pick(CLASSES)]);
+        add([pick(INDIVIDUALS), "a", r]);
+      }
+    }
+  };
   while (out.size < n) {
     const r = rnd();
     let t: T3;
-    if (r < 0.28) {
+    if (r < 0.1) {
+      structure();
+      continue;
+    }
+    if (r < 0.3) {
       const o = rnd() < 0.2 ? pick(LITERALS) : pick(INDIVIDUALS);
       t = [pick(INDIVIDUALS), pick(PROPS), o];
     } else if (r < 0.38) t = [pick(INDIVIDUALS), "a", pick(CLASSES)];
@@ -64,13 +153,20 @@ export function generate(seed: number): T3[] {
     else if (r < 0.89) t = [pick(PROPS), "range", pick(CLASSES)];
     else if (r < 0.95) t = [pick(PROPS), "inverseOf", pick(PROPS)];
     else t = [pick(PROPS), "subPropertyOf", pick(PROPS)];
-    out.set(t.join(" "), t);
+    add(t);
   }
   return [...out.values()];
 }
 
 function term(s: string) {
-  if (s.startsWith('"')) return df.literal(s.slice(1, -1));
+  if (s.startsWith('"')) {
+    const m = /^"(.*)"(?:\^\^xsd:(\w+)|@(\w+))?$/.exec(s)!;
+    if (m[3]) return df.literal(m[1]!, m[3]);
+    if (m[2]) return df.literal(m[1]!, df.namedNode(XSD + m[2]));
+    return df.literal(m[1]!);
+  }
+  if (s.startsWith("_:")) return df.blankNode(s.slice(2));
+  if (RDF_NAMES.includes(s)) return df.namedNode(RDF + s);
   if (s === "a") return df.namedNode(RDF_TYPE);
   if (OWL_NAMES.includes(s)) return df.namedNode(OWL + s);
   if (RDFS_NAMES.includes(s)) return df.namedNode(RDFS + s);
