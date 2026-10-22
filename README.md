@@ -44,6 +44,10 @@ complement-class skolems, and types whose class is a blank node.
 - `deno task test:w3c`: the W3C OWL 2 RL test cases (approved and proposed),
   fetched from w3.org into `.cache/`. A test in `test/w3c/expected-pass.json`
   that fails is a regression; `deno task test:w3c:update` records new passes.
+- `deno task test:differential [--seeds N]`: `Reasoner.extend` and `retract`
+  against a fresh run on random graphs (modes extend, retract, retract-instance,
+  retract-full); exits 1 on a new failure class. CI runs 1000 seeds (about 7 s);
+  a nightly workflow runs 5000.
 - `deno task bench`: closure time and memory on synthetic graphs
   (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
 

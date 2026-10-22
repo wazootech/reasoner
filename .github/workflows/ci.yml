@@ -53,3 +53,14 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno task bench:check
+  # Differential oracle: Reasoner.extend/retract against a fresh run on random
+  # graphs. A new failure class fails the job. The nightly workflow runs more
+  # seeds.
+  differential:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task test:differential --seeds 1000
