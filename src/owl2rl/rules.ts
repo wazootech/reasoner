@@ -61,8 +61,6 @@ export const RELATIONS = {
   keyContext: 2,
   sameValues: 4,
   literal: 1,
-  stringClass: 1,
-  fpLiteral: 3,
 } as const;
 
 /** NONE pads an inconsistency row that names fewer than five terms. */
@@ -330,25 +328,18 @@ const equalityRules: Rule[] = [
       ([r], context) => someValuesDiffer(r!, r!, context, false),
     ),
   ], [t(v.r, OWL.differentFrom, v.r)]),
-  // The old ruleset's sameAs-scoped xsd:string difference.
-  rule("string-class", [
+  // The same for xsd:string values. Different strings (or literals) are not
+  // paired across classes: that is quadratic in the literals of the graph, and
+  // nothing needs it, because a later merge of two classes puts both values in
+  // one class, where this rule and dt-diff-class see them.
+  rule("dt-diff-class-string", [
     t(v.r, OWL.sameAs, v.r),
-    filter("has-string", [v.r], ([r], context) => {
-      for (const [, literal] of literalsOf(r!, context)) {
-        if (literalDatatype(literal) === XSD.string.value) return true;
-      }
-      return false;
-    }),
-  ], [atom("stringClass", v.r)]),
-  rule("dt-diff-string", [
-    atom("stringClass", v.a),
-    atom("stringClass", v.b),
     filter(
       "different-strings",
-      [v.a, v.b],
-      ([a, b], context) => someValuesDiffer(a!, b!, context, true),
+      [v.r],
+      ([r], context) => someValuesDiffer(r!, r!, context, true),
     ),
-  ], [t(v.a, OWL.differentFrom, v.b)]),
+  ], [t(v.r, OWL.differentFrom, v.r)]),
 ];
 
 const propertyRules: Rule[] = [
@@ -495,28 +486,6 @@ const propertyRules: Rule[] = [
     t(v.x1, v.p, v.y1),
     t(v.y1, OWL.differentFrom, v.y2),
     t(v.x2, v.p, v.y2),
-  ], [t(v.x1, OWL.differentFrom, v.x2)]),
-  // Split in two so the join does not pair every value of a functional
-  // property with every other: only the values that hold a literal
-  // (`fpLiteral`) are paired, rather than all of them, which was quadratic
-  // in the data when most values are not literals.
-  rule("prp-fp-literal", [
-    t(v.p, RDF.type, OWL.FunctionalProperty),
-    t(v.x1, v.p, v.y1),
-    filter(
-      "has-value",
-      [v.y1],
-      ([y], context) => !literalsOf(y!, context).next().done,
-    ),
-  ], [atom("fpLiteral", v.p, v.x1, v.y1)]),
-  rule("prp-fp-different-values", [
-    atom("fpLiteral", v.p, v.x1, v.y1),
-    t(v.x2, v.p, v.y2),
-    filter(
-      "different-values",
-      [v.y1, v.y2],
-      ([a, b], context) => someValuesDiffer(a!, b!, context, false),
-    ),
   ], [t(v.x1, OWL.differentFrom, v.x2)]),
   rule("prp-ifp-different", [
     t(v.p, RDF.type, OWL.InverseFunctionalProperty),
