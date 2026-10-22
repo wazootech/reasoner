@@ -6,9 +6,9 @@ An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 **Status: 0.1.0, published to JSR (2026-10-21).** The OWL 2 RL ruleset, the
 semi-naive engine, and `owl:sameAs` as a union-find work. Incremental additions
 (`extend`) work but are known to miss some derivations when `owl:sameAs` arrives
-late ([#8](https://github.com/wazootech/reasoner/issues/8); `deno task
-test:differential` lists the failure classes). Retraction is not implemented yet,
-and the Worlds integration has not started. The Wiki switched from
+late ([#8](https://github.com/wazootech/reasoner/issues/8); the failure classes
+are listed by `test:differential`). Retraction is not implemented yet, and the
+Worlds integration has not started. The Wiki switched from
 `rdfjs-inference-engine` to this package in
 [wazootech/wiki#418](https://github.com/wazootech/wiki/pull/418). The plan is
 [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
