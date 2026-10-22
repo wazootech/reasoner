@@ -154,14 +154,20 @@ function someValuesDiffer(
   return false;
 }
 
+/** complementSkolem names the complement class of `named`. */
+export function complementSkolem(named: Term): NamedNode {
+  return dataFactory.namedNode(
+    COMPLEMENT_PREFIX + encodeURIComponent(termKey(named)),
+  );
+}
+
 const complementOf = bind(
   "complement",
   [v.c],
   [v.notC],
   (inputs, context) => {
     const named = context.term(context.find(inputs[0]!));
-    const iri = COMPLEMENT_PREFIX + encodeURIComponent(termKey(named));
-    return [[context.id(dataFactory.namedNode(iri))]];
+    return [[context.id(complementSkolem(named))]];
   },
 );
 

@@ -11,6 +11,7 @@ export {
   type ClosureView,
   type Inconsistency,
   Reasoner,
+  type RetractOptions,
   type Triple,
 } from "@/reasoner.ts";
 export { Engine, type EngineOptions, type EngineStatistics } from "@/engine.ts";

@@ -292,3 +292,109 @@ ex:m ex:n "0.0"^^xsd:float, "0"^^xsd:float .
 `);
   assertEquals(reasoner.inconsistencies(), []);
 });
+
+function closureKeys(reasoner: Reasoner): string[] {
+  return [...reasoner.closure("complete")].map((q) =>
+    [q.subject, q.predicate, q.object].map((t) =>
+      t.termType === "Literal" ? `"${t.value}"^^${t.datatype.value}` : t.value
+    ).join(" ")
+  ).sort();
+}
+
+Deno.test("retract removes a triple and what only it entailed", () => {
+  const reasoner = reason(`
+ex:Student rdfs:subClassOf ex:Person .
+ex:alice a ex:Student .
+`);
+  assert(entails(reasoner, "alice", RDF_TYPE, "Person"));
+  const removed = reasoner.retract(
+    quads(`ex:Student rdfs:subClassOf ex:Person .`),
+  );
+  assertFalse(entails(reasoner, "alice", RDF_TYPE, "Person"));
+  assert(entails(reasoner, "alice", RDF_TYPE, "Student"));
+  assert(
+    removed.some((q) =>
+      q.subject.value === EX + "alice" && q.object.value === EX + "Person"
+    ),
+  );
+});
+
+Deno.test("retract keeps what another derivation still entails", () => {
+  const reasoner = reason(`
+ex:A rdfs:subClassOf ex:C . ex:B rdfs:subClassOf ex:C .
+ex:x a ex:A, ex:B .
+`);
+  reasoner.retract(quads(`ex:A rdfs:subClassOf ex:C .`));
+  assert(entails(reasoner, "x", RDF_TYPE, "C"));
+});
+
+Deno.test("retract splits an owl:sameAs class", () => {
+  const reasoner = reason(`
+ex:a owl:sameAs ex:b . ex:b owl:sameAs ex:c .
+ex:a ex:p ex:o .
+`);
+  assert(entails(reasoner, "c", "p", "o"));
+  reasoner.retract(quads(`ex:b owl:sameAs ex:c .`));
+  assertFalse(entails(reasoner, "c", "p", "o"));
+  assert(entails(reasoner, "b", "p", "o"));
+});
+
+Deno.test("retract ignores a triple that was only entailed", () => {
+  const reasoner = reason(`
+ex:Student rdfs:subClassOf ex:Person .
+ex:alice a ex:Student .
+`);
+  assertEquals(reasoner.retract(quads(`ex:alice a ex:Person .`)), []);
+  assert(entails(reasoner, "alice", RDF_TYPE, "Person"));
+});
+
+Deno.test("retract equals a fresh run, locally and over the whole closure", () => {
+  const graph = `
+ex:Student rdfs:subClassOf ex:Person .
+ex:alice a ex:Student ; ex:knows ex:bob .
+ex:bob owl:sameAs ex:robert .
+ex:knows a owl:SymmetricProperty .
+ex:other a ex:Thing ; ex:p ex:q .
+`;
+  const rest = `
+ex:Student rdfs:subClassOf ex:Person .
+ex:alice a ex:Student .
+ex:knows a owl:SymmetricProperty .
+ex:other a ex:Thing ; ex:p ex:q .
+`;
+  const fresh = closureKeys(reason(rest));
+  for (const options of [{}, { maxScope: 0 }]) {
+    const reasoner = reason(graph);
+    reasoner.retract(
+      quads(`ex:bob owl:sameAs ex:robert .`),
+      "complete",
+      options,
+    );
+    reasoner.retract(quads(`ex:alice ex:knows ex:bob .`), "complete", options);
+    assertEquals(closureKeys(reasoner), fresh);
+  }
+});
+
+Deno.test("retract recomputes only the component of the triple", () => {
+  const reasoner = new Reasoner();
+  const lines: string[] = [];
+  for (let i = 0; i < 50; i++) {
+    lines.push(`ex:c${i} rdfs:subClassOf ex:d${i} . ex:i${i} a ex:c${i} .`);
+  }
+  reasoner.add(quads(lines.join("\n")));
+  reasoner.run();
+  const before = reasoner.statistics.derivations;
+  reasoner.retract(quads(`ex:c7 rdfs:subClassOf ex:d7 .`));
+  // A whole-closure rebuild would derive every component again.
+  assert(reasoner.statistics.derivations - before < before / 5);
+  assertFalse(entails(reasoner, "i7", RDF_TYPE, "d7"));
+  assert(entails(reasoner, "i8", RDF_TYPE, "d8"));
+});
+
+Deno.test("an extended triple can be retracted", () => {
+  const reasoner = reason(`ex:Student rdfs:subClassOf ex:Person .`);
+  reasoner.extend(quads(`ex:alice a ex:Student .`));
+  assert(entails(reasoner, "alice", RDF_TYPE, "Person"));
+  reasoner.retract(quads(`ex:alice a ex:Student .`));
+  assertFalse(entails(reasoner, "alice", RDF_TYPE, "Person"));
+});

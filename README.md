@@ -7,9 +7,9 @@ An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 semi-naive engine, and `owl:sameAs` as a union-find work. Incremental additions
 (`extend`) work but are known to miss some derivations when `owl:sameAs` arrives
 late ([#8](https://github.com/wazootech/reasoner/issues/8); the failure classes
-are listed by `test:differential`). Retraction is not implemented yet, and the
-Worlds integration has not started. The Wiki switched from
-`rdfjs-inference-engine` to this package in
+are listed by `test:differential`). `retract` removes asserted triples by
+recomputing their connected component, and the Worlds integration has not
+started. The Wiki switched from `rdfjs-inference-engine` to this package in
 [wazootech/wiki#418](https://github.com/wazootech/wiki/pull/418). The plan is
 [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
 evidence for it is in
@@ -28,6 +28,9 @@ reasoner.inconsistencies(); // [{ rule: "cax-dw", terms: [...] }, ...]
 
 // Later: reason about a change against the closure already computed.
 const added = reasoner.extend(moreQuads, "application");
+
+// Or take asserted triples back; the result is what is no longer entailed.
+const removed = reasoner.retract(goneQuads, "application");
 ```
 
 `closure("complete")` lists every entailed triple. `"application"` leaves out
@@ -76,9 +79,13 @@ Worlds needs to reason about a change (Δ) against an existing closure.
   indexed joins, not interpreted as N3 text. Evaluation is semi-naive, and
   `owl:sameAs` is handled with a union-find of representatives instead of
   copying triples.
-- **Incremental.** Given a closure and a Δ, derive only what the Δ adds (and,
-  later, retract what a deletion removes). This shares its "what does this
-  change touch" question with the scoped SHACL validation planned for Worlds
+- **Incremental.** Given a closure and a Δ, derive only what the Δ adds (and
+  retract what a deletion removes). `retract` re-derives only the connected
+  component of the deleted triple, but it finds that component with one pass
+  over the asserted triples, so its cost is linear in the graph plus the
+  component, and a component past `maxScope` is recomputed whole. This shares
+  its "what does this change touch" question with the scoped SHACL validation
+  planned for Worlds
   ([worlds-sdk-ts#151](https://github.com/wazootech/worlds-sdk-ts/issues/151)).
 - **Gated like `sparql-engine`.** Done means the W3C OWL 2 RL conformance tests
   pass in CI, and the closure matches the Wiki's current engine triple for
