@@ -173,7 +173,7 @@ function key(quad: Quad): string {
   return `${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`;
 }
 
-Deno.test("functional-property values that are literals still differ", () => {
+Deno.test("functional-property values that are literals are not paired as differentFrom", () => {
   const reasoner = reason(`
 ex:id a owl:FunctionalProperty .
 ex:a ex:id "1"^^xsd:integer .
@@ -182,8 +182,11 @@ ex:c ex:id "1"^^xsd:integer .
 ex:d ex:id ex:v1 .
 ex:e ex:id ex:v2 .
 `);
-  assert(entails(reasoner, "a", `${OWL}differentFrom`, "b"));
-  assert(entails(reasoner, "b", `${OWL}differentFrom`, "a"));
+  // Distinct literal values would pair every subject with every other (issue
+  // #7), so no differentFrom is derived; a merge of such subjects is still
+  // inconsistent (the tests below).
+  assertFalse(entails(reasoner, "a", `${OWL}differentFrom`, "b"));
+  assertFalse(entails(reasoner, "b", `${OWL}differentFrom`, "a"));
   assertFalse(entails(reasoner, "a", `${OWL}differentFrom`, "c"));
   assertFalse(entails(reasoner, "d", `${OWL}differentFrom`, "e"));
 });
@@ -234,12 +237,12 @@ Deno.test("a second literal joining a class late makes it differentFrom itself",
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
 
-Deno.test("a functional property whose values become literals late differs", () => {
+Deno.test("values that become different literals late make their merge inconsistent", () => {
   const reasoner = incrementalMatchesFull(
     `ex:p0 a owl:FunctionalProperty . ex:a ex:p0 ex:y . ex:b ex:p0 ex:z .`,
-    `ex:y owl:sameAs "1" . ex:z owl:sameAs "2" .`,
+    `ex:y owl:sameAs "1" . ex:z owl:sameAs "2" . ex:y owl:sameAs ex:z .`,
   );
-  assert(reasoner.has(ex("y"), iri(`${OWL}differentFrom`), ex("z")));
+  assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
 
 Deno.test("a literal joining a class late types the class", () => {
@@ -424,4 +427,33 @@ Deno.test("retract keeps schema triples whose terms are also individuals", () =>
       assertEquals(closureKeys(reasoner), closureKeys(reason(rest)));
     }
   }
+});
+
+Deno.test("distinct literal values of a functional property derive no differentFrom between subjects", () => {
+  const lines = ["ex:id a owl:FunctionalProperty ."];
+  for (let i = 0; i < 40; i++) lines.push(`ex:s${i} ex:id "v${i}" .`);
+  const reasoner = reason(lines.join("\n"));
+  const different = [...reasoner.closure("complete")].filter((q) =>
+    q.predicate.value === `${OWL}differentFrom` &&
+    q.subject.value.startsWith(EX)
+  );
+  assertEquals(different.length, 0);
+});
+
+Deno.test("subjects with different literal values of a functional property cannot be the same", () => {
+  const reasoner = reason(`
+ex:id a owl:FunctionalProperty .
+ex:a ex:id "1" . ex:b ex:id "2" .
+ex:a owl:sameAs ex:b .
+`);
+  assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
+});
+
+Deno.test("an inverse-functional merge of subjects with different literal values is inconsistent", () => {
+  const reasoner = reason(`
+ex:id a owl:FunctionalProperty .
+ex:k a owl:InverseFunctionalProperty .
+ex:a ex:id "1" ; ex:k ex:z . ex:b ex:id "2" ; ex:k ex:z .
+`);
+  assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });

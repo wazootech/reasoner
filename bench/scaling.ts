@@ -3,7 +3,7 @@
  * growing size, with and without `owl:sameAs` producers.
  *
  *     deno task bench [--sizes 1e3,1e4,1e5,1e6]
- *                     [--profile plain|equality|sameas|delete] [--check]
+ *                     [--profile plain|equality|sameas|delete|fpliteral] [--check]
  *
  * With `--check` the run fails when a time is over its limit in
  * `bench/thresholds.json`, or when doubling the size more than
@@ -44,7 +44,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-export type Profile = "plain" | "equality" | "sameas" | "delete";
+export type Profile = "plain" | "equality" | "sameas" | "delete" | "fpliteral";
 
 /** sameAsHeavy is the repro of #5: about `size` asserted triples. */
 function sameAsHeavy(size: number): Quad[] {
@@ -64,9 +64,31 @@ function sameAsHeavy(size: number): Quad[] {
   return quads;
 }
 
+/**
+ * functionalLiterals is the repro of #7: one functional property and `size`
+ * subjects with a distinct plain literal each. Pairing every subject with every
+ * other made the closure quadratic.
+ */
+function functionalLiterals(size: number): Quad[] {
+  const quads = [
+    dataFactory.quad(
+      ex("id"),
+      node(RDF_TYPE),
+      node(`${OWL}FunctionalProperty`),
+    ),
+  ];
+  for (let i = 0; i < size; i++) {
+    quads.push(
+      dataFactory.quad(ex(`p${i}`), ex("id"), dataFactory.literal(`v${i}`)),
+    );
+  }
+  return quads;
+}
+
 /** generate returns about `size` asserted triples for `profile`. */
 export function generate(size: number, profile: Profile): Quad[] {
   if (profile === "sameas" || profile === "delete") return sameAsHeavy(size);
+  if (profile === "fpliteral") return functionalLiterals(size);
   const random = mulberry32(size);
   const quads: Quad[] = [];
   const add = (s: string, p: string, o: Quad["object"]) =>
