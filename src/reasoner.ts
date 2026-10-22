@@ -66,6 +66,7 @@ export class Reasoner {
       equalityRelation: TRIPLE,
       sameAs: OWL.sameAs,
       relations: RELATIONS,
+      contentTerm: (term) => term.termType === "Literal",
     });
     this.#triples = this.#engine.relation(TRIPLE);
     for (const [subject, predicate, object] of AXIOMS) {
