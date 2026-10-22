@@ -172,3 +172,52 @@ ex:gus ex:hasMother ex:m2 .
 function key(quad: Quad): string {
   return `${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`;
 }
+
+/** incrementalMatchesFull runs base then extend(delta) against one full run. */
+function incrementalMatchesFull(base: string, delta: string): Reasoner {
+  const incremental = reason(base);
+  incremental.extend(quads(delta));
+  const full = reason(base + delta);
+  const closure = (reasoner: Reasoner) =>
+    [...reasoner.closure()].map(key).sort();
+  const rules = (reasoner: Reasoner) =>
+    [...new Set(reasoner.inconsistencies().map((i) => i.rule))].sort();
+  assertEquals(closure(incremental), closure(full));
+  assertEquals(rules(incremental), rules(full));
+  return incremental;
+}
+
+Deno.test("a second literal joining a class late makes it differentFrom itself", () => {
+  const reasoner = incrementalMatchesFull(
+    `ex:i0 owl:sameAs "2" .`,
+    `ex:i0 owl:sameAs "1" .`,
+  );
+  assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
+});
+
+Deno.test("a functional property whose values become literals late differs", () => {
+  const reasoner = incrementalMatchesFull(
+    `ex:p0 a owl:FunctionalProperty . ex:a ex:p0 ex:y . ex:b ex:p0 ex:z .`,
+    `ex:y owl:sameAs "1" . ex:z owl:sameAs "2" .`,
+  );
+  assert(reasoner.has(ex("y"), iri(`${OWL}differentFrom`), ex("z")));
+});
+
+Deno.test("a literal joining a class late types the class", () => {
+  const reasoner = incrementalMatchesFull(
+    `ex:i1 owl:sameAs ex:i0 .`,
+    `ex:i1 owl:sameAs "2" .`,
+  );
+  const rdfsLiteral = iri("http://www.w3.org/2000/01/rdf-schema#Literal");
+  assert(reasoner.has(ex("i0"), iri(RDF_TYPE), rdfsLiteral));
+});
+
+Deno.test("an inverse-functional merge that adds a late literal still reports eq-diff1", () => {
+  const reasoner = incrementalMatchesFull(
+    `ex:p0 owl:inverseOf ex:p3 . ex:i1 ex:p0 "1" .
+ex:p0 owl:inverseOf ex:p1 . ex:p1 a owl:InverseFunctionalProperty .
+ex:p0 rdfs:subPropertyOf ex:p1 . ex:i0 owl:sameAs "2" .`,
+    `ex:i1 ex:p3 ex:i0 .`,
+  );
+  assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
+});
