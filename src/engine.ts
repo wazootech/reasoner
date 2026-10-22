@@ -103,6 +103,7 @@ export class Engine {
   /** #reseed holds roots whose class gained a content term in a merge. */
   #reseed: number[] = [];
   #context: BuiltinContext;
+  #recorded: Fact[] | undefined;
 
   constructor(rules: readonly Rule[], options: EngineOptions) {
     for (const [name, arity] of Object.entries(options.relations)) {
@@ -151,6 +152,18 @@ export class Engine {
    */
   add(relation: string, args: readonly number[]): boolean {
     return this.#store(this.relation(relation), args);
+  }
+
+  /** record starts collecting every fact stored from now on. */
+  record(): void {
+    this.#recorded = [];
+  }
+
+  /** stopRecording returns the facts stored since {@link Engine.record}. */
+  stopRecording(): Fact[] {
+    const facts = this.#recorded ?? [];
+    this.#recorded = undefined;
+    return facts;
   }
 
   /**
@@ -277,6 +290,7 @@ export class Engine {
     }
     const fact = relation.insert(canonical, this.#clock);
     if (fact === undefined) return false;
+    this.#recorded?.push(fact);
     this.statistics.derivations++;
     const pending = this.#delta.get(relation);
     if (pending === undefined) this.#delta.set(relation, [fact]);

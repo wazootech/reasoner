@@ -81,11 +81,11 @@ Worlds needs to reason about a change (Δ) against an existing closure.
   copying triples.
 - **Incremental.** Given a closure and a Δ, derive only what the Δ adds (and
   retract what a deletion removes). `retract` re-derives only the connected
-  component of the deleted triple, but it finds that component with one pass
-  over the asserted triples, so its cost is linear in the graph plus the
-  component, and a component past `maxScope` is recomputed whole. This shares
-  its "what does this change touch" question with the scoped SHACL validation
-  planned for Worlds
+  component of deleted triples about individuals (an index of components is kept
+  as triples are asserted). Deleting a schema triple, such as a subclass or a
+  restriction, or a component past `maxScope` recomputes the whole closure. This
+  shares its "what does this change touch" question with the scoped SHACL
+  validation planned for Worlds
   ([worlds-sdk-ts#151](https://github.com/wazootech/worlds-sdk-ts/issues/151)).
 - **Gated like `sparql-engine`.** Done means the W3C OWL 2 RL conformance tests
   pass in CI, and the closure matches the Wiki's current engine triple for

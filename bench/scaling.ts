@@ -3,7 +3,7 @@
  * growing size, with and without `owl:sameAs` producers.
  *
  *     deno task bench [--sizes 1e3,1e4,1e5,1e6]
- *                     [--profile plain|equality|sameas] [--check]
+ *                     [--profile plain|equality|sameas|delete] [--check]
  *
  * With `--check` the run fails when a time is over its limit in
  * `bench/thresholds.json`, or when doubling the size more than
@@ -16,7 +16,10 @@
  * `owl:sameAs` classes: the case that was quadratic before. `sameas` is the
  * repro from #5: every person has two values on a functional property (so the
  * values merge), and half the people are explicitly `owl:sameAs` the previous
- * one.
+ * one. `delete` builds the `sameas` graph, then times one `retract` of every
+ * hundredth asserted triple, and reports a fresh run on what remains next to it.
+ * The graph is thousands of two- and three-person components, so a retraction
+ * has to recompute only the few it touches.
  */
 import { parseArgs } from "@std/cli/parse-args";
 import type { Quad } from "@rdfjs/types";
@@ -41,7 +44,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-export type Profile = "plain" | "equality" | "sameas";
+export type Profile = "plain" | "equality" | "sameas" | "delete";
 
 /** sameAsHeavy is the repro of #5: about `size` asserted triples. */
 function sameAsHeavy(size: number): Quad[] {
@@ -63,7 +66,7 @@ function sameAsHeavy(size: number): Quad[] {
 
 /** generate returns about `size` asserted triples for `profile`. */
 export function generate(size: number, profile: Profile): Quad[] {
-  if (profile === "sameas") return sameAsHeavy(size);
+  if (profile === "sameas" || profile === "delete") return sameAsHeavy(size);
   const random = mulberry32(size);
   const quads: Quad[] = [];
   const add = (s: string, p: string, o: Quad["object"]) =>
@@ -144,14 +147,41 @@ if (import.meta.main) {
   console.log("|---:|---|---:|---:|---:|---:|---:|---:|");
   for (const size of sizes) {
     const quads = generate(size, profile);
-    const start = performance.now();
+    let start = performance.now();
     const reasoner = new Reasoner();
     reasoner.add(quads);
     reasoner.run();
     let closure = 0;
     for (const _ of reasoner.closure("application")) closure++;
-    const ms = performance.now() - start;
+    let ms = performance.now() - start;
     const stats = reasoner.statistics;
+    if (profile === "delete") {
+      // The measured time is the retraction; a fresh run on the rest is the
+      // baseline it has to beat.
+      const gone = quads.filter((_, index) => index % 100 === 50);
+      const kept = quads.filter((_, index) => index % 100 !== 50);
+      const built = ms;
+      start = performance.now();
+      const removed = reasoner.retract(gone, "application").length;
+      ms = performance.now() - start;
+      start = performance.now();
+      const fresh = new Reasoner();
+      fresh.add(kept);
+      fresh.run();
+      const freshMs = performance.now() - start;
+      console.log(
+        `| ${quads.length} | delete | built ${(built / 1000).toFixed(2)} s | ` +
+          `retract ${gone.length} triples: ${(ms / 1000).toFixed(2)} s, ` +
+          `${removed} removed | fresh run on the rest: ${
+            (freshMs / 1000).toFixed(2)
+          } s | |`,
+      );
+      const limit = thresholds.profiles[profile]?.[String(size)];
+      if (limit !== undefined && ms > limit) {
+        failures.push(`${profile} ${size}: ${Math.round(ms)} ms > ${limit} ms`);
+      }
+      continue;
+    }
     console.log(
       `| ${quads.length} | ${profile} | ${closure} | ${stats.merges} | ${stats.rounds} | ` +
         `${(ms / 1000).toFixed(2)} s | ${

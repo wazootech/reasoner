@@ -4,7 +4,9 @@
 //   closure and inconsistencies as the whole graph added up front.
 // - retract: the whole graph with the delta retracted must equal a fresh run on
 //   the base alone, and the triples retract reports must be exactly the ones
-//   that fresh run lost. "retract-full" forces the whole-closure fallback.
+//   that fresh run lost. "retract-instance" retracts only triples about
+//   individuals, the case retract recomputes locally; "retract-full" forces
+//   the whole-closure fallback.
 //
 // Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
@@ -223,8 +225,24 @@ export function incremental(
   return outcome(r);
 }
 
-export type Mode = "extend" | "retract" | "retract-full";
-export const MODES: readonly Mode[] = ["extend", "retract", "retract-full"];
+export type Mode =
+  | "extend"
+  | "retract"
+  | "retract-instance"
+  | "retract-full";
+export const MODES: readonly Mode[] = [
+  "extend",
+  "retract",
+  "retract-instance",
+  "retract-full",
+];
+
+/** isInstance mirrors which triples retract recomputes locally. */
+export function isInstance([, p, o]: T3): boolean {
+  if (PROPS.includes(p)) return true;
+  if (p === "sameAs" || p === "differentFrom") return true;
+  return p === "a" && (CLASSES.includes(o) || o.startsWith("_:r"));
+}
 
 /** retracted adds base and delta, runs, then retracts delta. */
 export function retracted(
@@ -365,8 +383,13 @@ export function runSeed(seed: number, mode: Mode = "extend"): Failure | null {
   const triples = generate(seed);
   const rnd = prng(seed ^ 0x9E3779B9);
   const cut = 1 + Math.floor(rnd() * (triples.length - 1));
-  const base = triples.slice(0, cut);
-  const delta = triples.slice(cut);
+  let base = triples.slice(0, cut);
+  let delta = triples.slice(cut);
+  if (mode === "retract-instance") {
+    delta = triples.filter((t) => isInstance(t) && rnd() < 0.4);
+    if (delta.length === 0) return null;
+    base = triples.filter((t) => !delta.includes(t));
+  }
   const d = diff(base, delta, mode);
   if (d === null) return null;
   const cls = `${mode}: ${classify(d)}`;
