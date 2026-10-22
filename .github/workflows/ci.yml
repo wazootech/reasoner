@@ -42,3 +42,14 @@ jobs:
           path: .cache/owl2rl
           key: owl2rl-manifests-${{ hashFiles('test/w3c/run.ts') }}
       - run: deno task test:w3c
+  # Closure time on the sameAs-heavy repro of #5 and the equality profile must
+  # stay under the limits in bench/thresholds.json, and must not grow by more
+  # than maxDoublingRatio per doubling of the size.
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task bench:check
