@@ -3,12 +3,10 @@
 An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 [`@wazoo/sparql-engine`](https://github.com/wazootech/sparql-engine).
 
-**Status: 0.1.0, published to JSR (2026-10-21).** The OWL 2 RL ruleset, the
-semi-naive engine, and `owl:sameAs` as a union-find work. Incremental additions
-(`extend`) work but are known to miss some derivations when `owl:sameAs` arrives
-late ([#8](https://github.com/wazootech/reasoner/issues/8); the failure classes
-are listed by `test:differential`). `retract` removes asserted triples by
-recomputing their connected component, and the Worlds integration has not
+**Status: 0.2.0.** The OWL 2 RL ruleset, the semi-naive engine, `owl:sameAs` as
+a union-find, incremental additions (`extend`) and retraction (`retract`) work,
+and `deno task test:differential` finds no difference between `extend` or
+`retract` and a fresh run on 5,000 random graphs. The Worlds integration has not
 started. The Wiki switched from `rdfjs-inference-engine` to this package in
 [wazootech/wiki#418](https://github.com/wazootech/wiki/pull/418). The plan is
 [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
