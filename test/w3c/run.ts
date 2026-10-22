@@ -23,9 +23,11 @@
  *     deno task test:w3c:update
  */
 import type { Quad, Term } from "@rdfjs/types";
+import { parseArgs } from "@std/cli/parse-args";
 import { RdfXmlParser } from "rdfxml-streaming-parser";
 import { dataFactory, termKey } from "@wazoo/sparql-engine/term";
 import { Reasoner } from "@/mod.ts";
+import { functionalSyntaxToQuads } from "./functional-syntax.ts";
 
 const TEST = "http://www.w3.org/2007/OWL/testOntology#";
 const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
@@ -36,6 +38,7 @@ const MANIFESTS = [
 ];
 const CACHE = new URL("../../.cache/owl2rl/", import.meta.url);
 const EXPECTED = new URL("./expected-pass.json", import.meta.url);
+const KNOWN_GAPS = new URL("./known-gaps.json", import.meta.url);
 
 type Kind = "positive" | "negative" | "consistency" | "inconsistency";
 
@@ -51,9 +54,13 @@ interface TestCase {
   iri: string;
   status: string;
   kinds: Kind[];
+  semantics: string[];
   premise?: string;
   conclusion?: string;
   nonConclusion?: string;
+  fsPremise?: string;
+  fsConclusion?: string;
+  fsNonConclusion?: string;
 }
 
 async function cached(url: string): Promise<string> {
@@ -105,9 +112,13 @@ function testCases(quads: Quad[]): TestCase[] {
       iri,
       status: (values("status")[0] ?? "").replace(TEST, ""),
       kinds,
+      semantics: values("semantics").map((s) => s.replace(TEST, "")),
       premise: values("rdfXmlPremiseOntology")[0],
       conclusion: values("rdfXmlConclusionOntology")[0],
       nonConclusion: values("rdfXmlNonConclusionOntology")[0],
+      fsPremise: values("fsPremiseOntology")[0],
+      fsConclusion: values("fsConclusionOntology")[0],
+      fsNonConclusion: values("fsNonConclusionOntology")[0],
     });
   }
   return cases.sort((a, b) => a.id.localeCompare(b.id));
@@ -248,16 +259,85 @@ function goal(quads: Quad[]): Quad[] {
   return [...quads.filter((quad) => !dropped.has(quad)), ...added];
 }
 
+/** ANNOTATION_PROPERTIES are the built-in annotation properties of OWL 2. */
+const ANNOTATION_PROPERTIES = new Set([
+  "http://www.w3.org/2000/01/rdf-schema#label",
+  "http://www.w3.org/2000/01/rdf-schema#comment",
+  "http://www.w3.org/2000/01/rdf-schema#seeAlso",
+  "http://www.w3.org/2000/01/rdf-schema#isDefinedBy",
+  `${OWL}versionInfo`,
+  `${OWL}priorVersion`,
+  `${OWL}backwardCompatibleWith`,
+  `${OWL}incompatibleWith`,
+  `${OWL}deprecated`,
+]);
+
+/**
+ * withoutAnnotations drops the annotation assertions of a conclusion when the
+ * test is for the Direct Semantics alone, which ignores annotations in the
+ * entailed ontology (the RDF-Based Semantics does not).
+ */
+function withoutAnnotations(
+  conclusion: Quad[],
+  premise: Quad[],
+  test: TestCase,
+): Quad[] {
+  if (
+    test.semantics.includes("RDF-BASED") || !test.semantics.includes("DIRECT")
+  ) {
+    return conclusion;
+  }
+  const annotation = new Set(ANNOTATION_PROPERTIES);
+  for (const quad of [...premise, ...conclusion]) {
+    if (
+      quad.predicate.value === RDF_TYPE &&
+      quad.object.value === `${OWL}AnnotationProperty`
+    ) annotation.add(quad.subject.value);
+  }
+  return conclusion.filter((quad) => !annotation.has(quad.predicate.value));
+}
+
+/** load parses one of a test's ontologies from RDF/XML, else functional syntax. */
+async function load(
+  test: TestCase,
+  part: "premise" | "conclusion" | "nonConclusion",
+): Promise<Quad[] | undefined> {
+  const xml = test[part];
+  if (xml !== undefined) return await parseRdfXml(xml, `${test.iri}/${part}`);
+  const fs = {
+    premise: test.fsPremise,
+    conclusion: test.fsConclusion,
+    nonConclusion: test.fsNonConclusion,
+  }[part];
+  return fs === undefined ? undefined : functionalSyntaxToQuads(fs);
+}
+
+/**
+ * withImports adds the closure of `owl:imports` to a premise. Each imported
+ * document is fetched once (and cached), with its own IRI as the base.
+ */
+async function withImports(quads: Quad[]): Promise<Quad[]> {
+  const out = [...quads];
+  const seen = new Set<string>();
+  for (let i = 0; i < out.length; i++) {
+    const quad = out[i]!;
+    if (quad.predicate.value !== `${OWL}imports`) continue;
+    const iri = quad.object.value;
+    if (seen.has(iri)) continue;
+    seen.add(iri);
+    out.push(...await parseRdfXml(await cached(iri), iri));
+  }
+  return out;
+}
+
 type Outcome = { ok: true } | { ok: false; reason: string };
 
 async function run(test: TestCase): Promise<Outcome> {
-  if (test.premise === undefined) {
-    return { ok: false, reason: "no RDF/XML premise" };
+  const own = await load(test, "premise");
+  if (own === undefined) {
+    return { ok: false, reason: "no RDF/XML or functional-syntax premise" };
   }
-  const premise = await parseRdfXml(test.premise, `${test.iri}/premise`);
-  if (premise.some((quad) => quad.predicate.value === `${OWL}imports`)) {
-    return { ok: false, reason: "premise imports another ontology" };
-  }
+  const premise = await withImports(own);
   const reasoner = new Reasoner();
   reasoner.add(premise);
   reasoner.run();
@@ -271,24 +351,37 @@ async function run(test: TestCase): Promise<Outcome> {
       return { ok: false, reason: "found no inconsistency" };
     }
     if (kind === "positive") {
-      if (test.conclusion === undefined) {
+      const parsed = await load(test, "conclusion");
+      if (parsed === undefined) {
         return { ok: false, reason: "no RDF/XML conclusion" };
       }
-      const conclusion = goal(
-        await parseRdfXml(test.conclusion, `${test.iri}/conclusion`),
+      const conclusion = withoutAnnotations(
+        goal(parsed),
+        premise,
+        test,
       );
       // An inconsistent premise entails everything.
       if (!inconsistent && !contains(closure, conclusion)) {
+        if (explain === test.id) {
+          const have = new Set(closure.map(tripleKey));
+          console.log(`PREMISE:\n${test.premise}`);
+          console.log(`CONCLUSION:\n${test.conclusion}`);
+          const missing = conclusion.filter((quad) =>
+            blanks(quad) === 0 && !have.has(tripleKey(quad))
+          );
+          console.log(
+            `MISSING (blank-free):\n${missing.map(tripleKey).join("\n")}`,
+          );
+        }
         return { ok: false, reason: "conclusion not entailed" };
       }
     }
     if (kind === "negative") {
-      if (test.nonConclusion === undefined) {
+      const parsed = await load(test, "nonConclusion");
+      if (parsed === undefined) {
         return { ok: false, reason: "no RDF/XML non-conclusion" };
       }
-      const nonConclusion = goal(
-        await parseRdfXml(test.nonConclusion, `${test.iri}/nonconclusion`),
-      );
+      const nonConclusion = goal(parsed);
       if (inconsistent || contains(closure, nonConclusion)) {
         return { ok: false, reason: "non-conclusion entailed" };
       }
@@ -297,8 +390,11 @@ async function run(test: TestCase): Promise<Outcome> {
   return { ok: true };
 }
 
-const update = Deno.args.includes("--update");
-const verbose = Deno.args.includes("--verbose");
+const args = parseArgs(Deno.args, {
+  boolean: ["update", "verbose"],
+  string: ["explain"],
+});
+const { update, verbose, explain } = args;
 const tests = new Map<string, TestCase>();
 for (const manifest of MANIFESTS) {
   for (
@@ -307,16 +403,21 @@ for (const manifest of MANIFESTS) {
     tests.set(test.id, test);
   }
 }
+const knownGaps: Record<string, string> = JSON.parse(
+  await Deno.readTextFile(KNOWN_GAPS),
+);
 const expected = new Set<string>(JSON.parse(await Deno.readTextFile(EXPECTED)));
 const passed: string[] = [];
 const regressions: string[] = [];
 const newlyPassing: string[] = [];
+const staleGaps: string[] = [];
 const reasons = new Map<string, number>();
 for (const test of tests.values()) {
   let outcome: Outcome;
   try {
     outcome = await run(test);
   } catch (error) {
+    if (verbose) console.error(error);
     outcome = {
       ok: false,
       reason: `error: ${(error as Error).message.split("\n")[0]}`,
@@ -325,8 +426,11 @@ for (const test of tests.values()) {
   if (outcome.ok) {
     passed.push(test.id);
     if (!expected.has(test.id)) newlyPassing.push(test.id);
+    if (test.id in knownGaps) staleGaps.push(test.id);
   } else {
-    const reason = outcome.reason.startsWith("error")
+    const reason = test.id in knownGaps
+      ? "known gap (see known-gaps.json)"
+      : outcome.reason.startsWith("error")
       ? "parse or run error"
       : outcome.reason;
     reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
@@ -354,6 +458,12 @@ if (update) {
     console.log(
       `Newly passing (run with --update to record): ${newlyPassing.join(", ")}`,
     );
+  }
+  if (staleGaps.length > 0) {
+    console.error(
+      `Passing but listed in known-gaps.json: ${staleGaps.join(", ")}`,
+    );
+    Deno.exit(1);
   }
   if (regressions.length > 0) {
     console.error(`Regressions:\n  ${regressions.join("\n  ")}`);

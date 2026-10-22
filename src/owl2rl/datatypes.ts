@@ -244,7 +244,12 @@ function sameValue(a: DatatypeValue, b: DatatypeValue): boolean {
       const right = b.kind === "decimal"
         ? Number(b.num) / 10 ** b.scale
         : b.value;
-      return !Number.isNaN(left) && !Number.isNaN(right) && left === right;
+      if (Number.isNaN(left) || Number.isNaN(right) || left !== right) {
+        return false;
+      }
+      // xsd:float and xsd:double keep +0 and -0 as distinct values.
+      return a.kind !== "floating" || b.kind !== "floating" ||
+        Object.is(left, right);
     }
     case "dateTime": {
       if (b.family !== "dateTime" || a.hasTimezone !== b.hasTimezone) {

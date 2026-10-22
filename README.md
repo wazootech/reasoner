@@ -48,11 +48,14 @@ complement-class skolems, and types whose class is a blank node.
 
 ## Conformance
 
-- **W3C OWL 2 RL suite** (`deno task test:w3c`): 81 of 90 pass. Four have no
-  RDF/XML premise and one imports another ontology. Four conclusions are not
-  entailed: `WebOnt-equivalentClass-008-Direct`, `WebOnt-I4.6-005-Direct`,
-  `WebOnt-I5.26-010`, and `WebOnt-I5.5-005`. `rdfjs-inference-engine` fails the
-  same four, so they are known gaps, not regressions.
+- **W3C OWL 2 RL suite** (`deno task test:w3c`): 87 of 90 pass. The harness
+  reads tests given in OWL functional syntax (a subset, `functional-syntax.ts`),
+  follows `owl:imports`, and ignores annotations in the conclusion of
+  Direct-Semantics tests. Three conclusions are not entailed, each with its
+  reason in `test/w3c/known-gaps.json`:
+  `New-Feature-ObjectPropertyChain-BJP-002` (no RL rule concludes a
+  `propertyChainAxiom`), and `WebOnt-I5.26-010` and `WebOnt-I5.5-005` (bare
+  anonymous class expressions, which the rules never create).
 - **Parity with `rdfjs-inference-engine`** (`deno task test:parity`): identical
   closures on `bench-1e3`, `docs`, `micro`, and `owl-nosame`. On `owl` this
   package derives two extra triples, a documented divergence (`eq-rep` applied
