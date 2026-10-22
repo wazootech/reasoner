@@ -260,3 +260,35 @@ ex:p0 rdfs:subPropertyOf ex:p1 . ex:i0 owl:sameAs "2" .`,
   );
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
+
+Deno.test("a plain string in the range of a numeric datatype is inconsistent", () => {
+  const reasoner = reason(`
+ex:age rdfs:range xsd:integer .
+ex:a ex:age "aString" .
+`);
+  assert(reasoner.inconsistencies().some((i) => i.rule === "dt-not-type"));
+});
+
+Deno.test("a plain string in the range of xsd:string is consistent", () => {
+  const reasoner = reason(`
+ex:name rdfs:range xsd:string .
+ex:a ex:name "Ada" .
+`);
+  assertEquals(reasoner.inconsistencies(), []);
+});
+
+Deno.test("positive and negative zero are distinct float values", () => {
+  const reasoner = reason(`
+ex:n a owl:FunctionalProperty .
+ex:m ex:n "+0.0"^^xsd:float, "-0.0"^^xsd:float .
+`);
+  assert(reasoner.inconsistencies().length > 0);
+});
+
+Deno.test("equal float zeros stay one value", () => {
+  const reasoner = reason(`
+ex:n a owl:FunctionalProperty .
+ex:m ex:n "0.0"^^xsd:float, "0"^^xsd:float .
+`);
+  assertEquals(reasoner.inconsistencies(), []);
+});

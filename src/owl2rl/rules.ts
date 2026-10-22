@@ -803,6 +803,21 @@ const datatypeRules: Rule[] = [
         isInvalidFor(context.term(m!) as Literal, datatype.value);
     }),
   ], [inconsistent("dt-not-type", v.m, v.dt)]),
+  // dt-not-type for the plain strings that dt-literal leaves unindexed, so a
+  // string typed as a number (for instance by a range) is still caught.
+  rule("dt-not-type-string", [
+    t(v.lt, RDF.type, v.dt),
+    bind("string-member", [v.lt], [v.m], function* (inputs, context) {
+      for (const [member, literal] of literalsOf(inputs[0]!, context)) {
+        if (isPlainString(literal)) yield [member];
+      }
+    }),
+    filter("invalid-for", [v.m, v.dt], ([m, dt], context) => {
+      const datatype = context.term(dt!);
+      return datatype.termType === "NamedNode" &&
+        isInvalidFor(context.term(m!) as Literal, datatype.value);
+    }),
+  ], [inconsistent("dt-not-type", v.m, v.dt)]),
 ];
 
 const schemaRules: Rule[] = [
