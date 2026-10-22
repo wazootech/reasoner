@@ -11,7 +11,7 @@
 // Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
 import { dataFactory as df } from "@wazoo/sparql-engine/term";
-import { Reasoner } from "@/mod.ts";
+import { COMPLEMENT_PREFIX, Reasoner } from "@/mod.ts";
 
 const E = "http://d.example/";
 const OWL = "http://www.w3.org/2002/07/owl#";
@@ -81,6 +81,10 @@ export function generate(seed: number): T3[] {
   const rnd = prng(seed);
   const pick = <X>(xs: readonly X[]): X => xs[Math.floor(rnd() * xs.length)]!;
   const n = 10 + Math.floor(rnd() * 31);
+  // An individual is occasionally a class or a property (punning), so schema
+  // triples and instance triples share terms.
+  const ind = () =>
+    rnd() < 0.1 ? pick([...CLASSES, ...PROPS]) : pick(INDIVIDUALS);
   const out = new Map<string, T3>();
   let fresh = 0;
   const add = (...ts: T3[]) => ts.forEach((t) => out.set(t.join(" "), t));
@@ -147,15 +151,15 @@ export function generate(seed: number): T3[] {
       continue;
     }
     if (r < 0.3) {
-      const o = rnd() < 0.2 ? pick(LITERALS) : pick(INDIVIDUALS);
-      t = [pick(INDIVIDUALS), pick(PROPS), o];
-    } else if (r < 0.38) t = [pick(INDIVIDUALS), "a", pick(CLASSES)];
+      const o = rnd() < 0.2 ? pick(LITERALS) : ind();
+      t = [ind(), pick(PROPS), o];
+    } else if (r < 0.38) t = [ind(), "a", pick(CLASSES)];
     else if (r < 0.52) t = [pick(PROPS), "a", pick(PROP_KINDS)];
     else if (r < 0.64) {
-      const o = rnd() < 0.3 ? pick(LITERALS) : pick(INDIVIDUALS);
-      t = [pick(INDIVIDUALS), "sameAs", o];
+      const o = rnd() < 0.3 ? pick(LITERALS) : ind();
+      t = [ind(), "sameAs", o];
     } else if (r < 0.70) {
-      t = [pick(INDIVIDUALS), "differentFrom", pick(INDIVIDUALS)];
+      t = [ind(), "differentFrom", ind()];
     } else if (r < 0.77) t = [pick(CLASSES), "subClassOf", pick(CLASSES)];
     else if (r < 0.83) t = [pick(PROPS), "domain", pick(CLASSES)];
     else if (r < 0.89) t = [pick(PROPS), "range", pick(CLASSES)];
@@ -198,9 +202,23 @@ export interface Outcome {
   inconsistencies: Set<string>;
 }
 
+/**
+ * isSkolem is `true` for a triple naming a complement-class skolem. The engine
+ * mints those for its own bookkeeping (the "application" view hides them), and
+ * whether a given one exists depends on the order rules fired in, so they are
+ * not compared; the inconsistencies they lead to are.
+ */
+function isSkolem(q: Quad): boolean {
+  return [q.subject, q.predicate, q.object].some((t) =>
+    t.termType === "NamedNode" && t.value.startsWith(COMPLEMENT_PREFIX)
+  );
+}
+
 function outcome(r: Reasoner): Outcome {
   return {
-    closure: new Set([...r.closure("complete")].map(key)),
+    closure: new Set(
+      [...r.closure("complete")].filter((q) => !isSkolem(q)).map(key),
+    ),
     // Reported terms are the class representatives, which depend on merge
     // order, so only the violated rule is compared.
     inconsistencies: new Set(r.inconsistencies().map((i) => i.rule)),
@@ -258,7 +276,10 @@ export function retracted(
     "complete",
     mode === "retract-full" ? { maxScope: 0 } : {},
   );
-  return { ...outcome(r), removed: new Set(removed.map(key)) };
+  return {
+    ...outcome(r),
+    removed: new Set(removed.filter((q) => !isSkolem(q)).map(key)),
+  };
 }
 
 export interface Diff {

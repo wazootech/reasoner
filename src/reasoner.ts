@@ -255,7 +255,14 @@ export class Reasoner {
    * them without depending on each other. The whole closure is recomputed
    * instead when any retracted triple is schema (subclass, domain, restriction
    * and so on), when the component is larger than
-   * {@link RetractOptions.maxScope}, or when it turns out not to be closed.
+   * {@link RetractOptions.maxScope}, or when it turns out not to be closed
+   * (a fact links it to another individual or to a complement class, or an
+   * asserted triple outside it names one of its terms).
+   *
+   * The result equals a fresh run for every input the differential test in
+   * `test/differential/` generates. Rules that derive schema-level facts from
+   * instance triples, other than the complement case handled above, are the
+   * known place this could be wrong.
    */
   retract(
     triples: Iterable<Triple>,
@@ -425,6 +432,11 @@ export class Reasoner {
     const before = new Map<string, Quad>();
     for (const fact of facts.get(this.#triples) ?? []) {
       for (const [s, p, o] of this.#expand(fact)) {
+        // An asserted triple outside the component that names one of its
+        // terms (a class used as an individual, say) would be purged and not
+        // asserted again, so the whole closure is recomputed instead.
+        const key = tripleKey(terms.term(s), terms.term(p), terms.term(o));
+        if (this.#asserted.has(key) && !scope.has(key)) return undefined;
         const quad = this.#quad(s, p, o, "complete");
         if (quad !== undefined) {
           before.set(
