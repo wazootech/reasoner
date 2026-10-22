@@ -62,6 +62,7 @@ export const RELATIONS = {
   sameValues: 4,
   literal: 1,
   stringClass: 1,
+  fpLiteral: 3,
 } as const;
 
 /** NONE pads an inconsistency row that names fewer than five terms. */
@@ -489,14 +490,21 @@ const propertyRules: Rule[] = [
     t(v.y1, OWL.differentFrom, v.y2),
     t(v.x2, v.p, v.y2),
   ], [t(v.x1, OWL.differentFrom, v.x2)]),
-  rule("prp-fp-different-values", [
+  // Split in two so the join does not pair every value of a functional
+  // property with every other: only the values that hold a literal
+  // (`fpLiteral`) are paired, rather than all of them, which was quadratic
+  // in the data when most values are not literals.
+  rule("prp-fp-literal", [
     t(v.p, RDF.type, OWL.FunctionalProperty),
     t(v.x1, v.p, v.y1),
     filter(
       "has-value",
       [v.y1],
-      ([y], context) => [...literalsOf(y!, context)].length > 0,
+      ([y], context) => !literalsOf(y!, context).next().done,
     ),
+  ], [atom("fpLiteral", v.p, v.x1, v.y1)]),
+  rule("prp-fp-different-values", [
+    atom("fpLiteral", v.p, v.x1, v.y1),
     t(v.x2, v.p, v.y2),
     filter(
       "different-values",

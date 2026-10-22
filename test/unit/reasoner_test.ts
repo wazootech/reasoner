@@ -172,3 +172,42 @@ ex:gus ex:hasMother ex:m2 .
 function key(quad: Quad): string {
   return `${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`;
 }
+
+Deno.test("functional-property values that are literals still differ", () => {
+  const reasoner = reason(`
+ex:id a owl:FunctionalProperty .
+ex:a ex:id "1"^^xsd:integer .
+ex:b ex:id "2"^^xsd:integer .
+ex:c ex:id "1"^^xsd:integer .
+ex:d ex:id ex:v1 .
+ex:e ex:id ex:v2 .
+`);
+  assert(entails(reasoner, "a", `${OWL}differentFrom`, "b"));
+  assert(entails(reasoner, "b", `${OWL}differentFrom`, "a"));
+  assertFalse(entails(reasoner, "a", `${OWL}differentFrom`, "c"));
+  assertFalse(entails(reasoner, "d", `${OWL}differentFrom`, "e"));
+});
+
+Deno.test("closure time stays near-linear on owl:sameAs-heavy graphs", () => {
+  const time = (people: number): number => {
+    const turtle = ["ex:hasId a owl:FunctionalProperty ."];
+    for (let i = 0; i < people; i++) {
+      turtle.push(`ex:p${i} a ex:Person ; ex:hasId ex:v${i} , ex:w${i} .`);
+      turtle.push(
+        i > 0 && i % 2 === 0
+          ? `ex:p${i} owl:sameAs ex:p${i - 1} .`
+          : `ex:p${i} ex:knows ex:p${i + 1} .`,
+      );
+    }
+    const reasoner = new Reasoner();
+    reasoner.add(quads(turtle.join("\n")));
+    const start = performance.now();
+    reasoner.run();
+    return performance.now() - start;
+  };
+  time(200); // warm up
+  const small = time(1000);
+  const large = time(8000);
+  // 8x the data: linear is ~8x, the quadratic behaviour was ~64x. Allow slack.
+  assert(large < Math.max(small, 20) * 24, `${small} ms -> ${large} ms`);
+});
