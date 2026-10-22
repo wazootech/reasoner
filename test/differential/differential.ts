@@ -4,12 +4,14 @@
 //   closure and inconsistencies as the whole graph added up front.
 // - retract: the whole graph with the delta retracted must equal a fresh run on
 //   the base alone, and the triples retract reports must be exactly the ones
-//   that fresh run lost. "retract-full" forces the whole-closure fallback.
+//   that fresh run lost. "retract-instance" retracts only triples about
+//   individuals, the case retract recomputes locally; "retract-full" forces
+//   the whole-closure fallback.
 //
 // Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
 import { dataFactory as df } from "@wazoo/sparql-engine/term";
-import { Reasoner } from "@/mod.ts";
+import { COMPLEMENT_PREFIX, Reasoner } from "@/mod.ts";
 
 const E = "http://d.example/";
 const OWL = "http://www.w3.org/2002/07/owl#";
@@ -79,6 +81,10 @@ export function generate(seed: number): T3[] {
   const rnd = prng(seed);
   const pick = <X>(xs: readonly X[]): X => xs[Math.floor(rnd() * xs.length)]!;
   const n = 10 + Math.floor(rnd() * 31);
+  // An individual is occasionally a class or a property (punning), so schema
+  // triples and instance triples share terms.
+  const ind = () =>
+    rnd() < 0.1 ? pick([...CLASSES, ...PROPS]) : pick(INDIVIDUALS);
   const out = new Map<string, T3>();
   let fresh = 0;
   const add = (...ts: T3[]) => ts.forEach((t) => out.set(t.join(" "), t));
@@ -145,15 +151,15 @@ export function generate(seed: number): T3[] {
       continue;
     }
     if (r < 0.3) {
-      const o = rnd() < 0.2 ? pick(LITERALS) : pick(INDIVIDUALS);
-      t = [pick(INDIVIDUALS), pick(PROPS), o];
-    } else if (r < 0.38) t = [pick(INDIVIDUALS), "a", pick(CLASSES)];
+      const o = rnd() < 0.2 ? pick(LITERALS) : ind();
+      t = [ind(), pick(PROPS), o];
+    } else if (r < 0.38) t = [ind(), "a", pick(CLASSES)];
     else if (r < 0.52) t = [pick(PROPS), "a", pick(PROP_KINDS)];
     else if (r < 0.64) {
-      const o = rnd() < 0.3 ? pick(LITERALS) : pick(INDIVIDUALS);
-      t = [pick(INDIVIDUALS), "sameAs", o];
+      const o = rnd() < 0.3 ? pick(LITERALS) : ind();
+      t = [ind(), "sameAs", o];
     } else if (r < 0.70) {
-      t = [pick(INDIVIDUALS), "differentFrom", pick(INDIVIDUALS)];
+      t = [ind(), "differentFrom", ind()];
     } else if (r < 0.77) t = [pick(CLASSES), "subClassOf", pick(CLASSES)];
     else if (r < 0.83) t = [pick(PROPS), "domain", pick(CLASSES)];
     else if (r < 0.89) t = [pick(PROPS), "range", pick(CLASSES)];
@@ -196,9 +202,23 @@ export interface Outcome {
   inconsistencies: Set<string>;
 }
 
+/**
+ * isSkolem is `true` for a triple naming a complement-class skolem. The engine
+ * mints those for its own bookkeeping (the "application" view hides them), and
+ * whether a given one exists depends on the order rules fired in, so they are
+ * not compared; the inconsistencies they lead to are.
+ */
+function isSkolem(q: Quad): boolean {
+  return [q.subject, q.predicate, q.object].some((t) =>
+    t.termType === "NamedNode" && t.value.startsWith(COMPLEMENT_PREFIX)
+  );
+}
+
 function outcome(r: Reasoner): Outcome {
   return {
-    closure: new Set([...r.closure("complete")].map(key)),
+    closure: new Set(
+      [...r.closure("complete")].filter((q) => !isSkolem(q)).map(key),
+    ),
     // Reported terms are the class representatives, which depend on merge
     // order, so only the violated rule is compared.
     inconsistencies: new Set(r.inconsistencies().map((i) => i.rule)),
@@ -223,8 +243,24 @@ export function incremental(
   return outcome(r);
 }
 
-export type Mode = "extend" | "retract" | "retract-full";
-export const MODES: readonly Mode[] = ["extend", "retract", "retract-full"];
+export type Mode =
+  | "extend"
+  | "retract"
+  | "retract-instance"
+  | "retract-full";
+export const MODES: readonly Mode[] = [
+  "extend",
+  "retract",
+  "retract-instance",
+  "retract-full",
+];
+
+/** isInstance mirrors which triples retract recomputes locally. */
+export function isInstance([, p, o]: T3): boolean {
+  if (PROPS.includes(p)) return true;
+  if (p === "sameAs" || p === "differentFrom") return true;
+  return p === "a" && (CLASSES.includes(o) || o.startsWith("_:r"));
+}
 
 /** retracted adds base and delta, runs, then retracts delta. */
 export function retracted(
@@ -240,7 +276,10 @@ export function retracted(
     "complete",
     mode === "retract-full" ? { maxScope: 0 } : {},
   );
-  return { ...outcome(r), removed: new Set(removed.map(key)) };
+  return {
+    ...outcome(r),
+    removed: new Set(removed.filter((q) => !isSkolem(q)).map(key)),
+  };
 }
 
 export interface Diff {
@@ -365,8 +404,13 @@ export function runSeed(seed: number, mode: Mode = "extend"): Failure | null {
   const triples = generate(seed);
   const rnd = prng(seed ^ 0x9E3779B9);
   const cut = 1 + Math.floor(rnd() * (triples.length - 1));
-  const base = triples.slice(0, cut);
-  const delta = triples.slice(cut);
+  let base = triples.slice(0, cut);
+  let delta = triples.slice(cut);
+  if (mode === "retract-instance") {
+    delta = triples.filter((t) => isInstance(t) && rnd() < 0.4);
+    if (delta.length === 0) return null;
+    base = triples.filter((t) => !delta.includes(t));
+  }
   const d = diff(base, delta, mode);
   if (d === null) return null;
   const cls = `${mode}: ${classify(d)}`;

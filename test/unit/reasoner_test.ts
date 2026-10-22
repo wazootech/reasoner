@@ -398,3 +398,30 @@ Deno.test("an extended triple can be retracted", () => {
   reasoner.retract(quads(`ex:alice a ex:Student .`));
   assertFalse(entails(reasoner, "alice", RDF_TYPE, "Person"));
 });
+
+Deno.test("retract keeps schema triples whose terms are also individuals", () => {
+  const cases: [string, string, string][] = [
+    [
+      `ex:C rdfs:subClassOf ex:D .`,
+      `ex:C ex:knows ex:b .`,
+      `ex:C rdfs:subClassOf ex:D .`,
+    ],
+    [
+      `ex:C rdfs:subClassOf ex:E . ex:D rdfs:subClassOf ex:F .`,
+      `ex:C owl:sameAs ex:D .`,
+      `ex:C rdfs:subClassOf ex:E . ex:D rdfs:subClassOf ex:F .`,
+    ],
+    [
+      `ex:p rdfs:domain ex:E . ex:q rdfs:range ex:F .`,
+      `ex:p owl:sameAs ex:q .`,
+      `ex:p rdfs:domain ex:E . ex:q rdfs:range ex:F .`,
+    ],
+  ];
+  for (const [base, gone, rest] of cases) {
+    for (const options of [{}, { maxScope: 0 }]) {
+      const reasoner = reason(base + gone);
+      reasoner.retract(quads(gone), "complete", options);
+      assertEquals(closureKeys(reasoner), closureKeys(reason(rest)));
+    }
+  }
+});

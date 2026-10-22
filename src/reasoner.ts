@@ -64,6 +64,45 @@ function isHub(term: Term): boolean {
     HUB_NAMESPACES.some((namespace) => term.value.startsWith(namespace));
 }
 
+/** INSTANCE_VOCABULARY are the vocabulary predicates that relate instances. */
+const INSTANCE_VOCABULARY = new Set([
+  `${RDF_NS}type`,
+  `${OWL_NS}sameAs`,
+  `${OWL_NS}differentFrom`,
+  "http://www.w3.org/2000/01/rdf-schema#label",
+  "http://www.w3.org/2000/01/rdf-schema#comment",
+  "http://www.w3.org/2000/01/rdf-schema#seeAlso",
+  "http://www.w3.org/2000/01/rdf-schema#isDefinedBy",
+]);
+
+/**
+ * isInstance is `true` for a triple about individuals: an ordinary property
+ * between two terms, `rdf:type` to a class that is not OWL or RDFS vocabulary,
+ * `owl:sameAs`, `owl:differentFrom` and annotations. Everything else (the
+ * ontology: subclass, domain and range, property characteristics, restrictions,
+ * lists) is schema, and retracting it recomputes the whole closure, since a
+ * class or property is shared by instances all over the graph.
+ */
+function isInstance([, p, o]: readonly Term[]): boolean {
+  if (p!.termType !== "NamedNode") return false;
+  if (!isHub(p!)) return true;
+  if (!INSTANCE_VOCABULARY.has(p!.value)) return false;
+  return p!.value !== `${RDF_NS}type` || !isHub(o!);
+}
+
+/**
+ * connectors are the terms of an instance triple that link it to other
+ * instance triples: its subject and object. Its predicate and the class of an
+ * `rdf:type` triple are schema terms that instances share without depending on
+ * each other, so they do not connect.
+ */
+function connectors(triple: readonly Term[]): Term[] {
+  if (!isInstance(triple)) return [];
+  const [s, p, o] = triple as [Term, Term, Term];
+  const linked = p.value === `${RDF_NS}type` ? [s] : [s, o];
+  return linked.filter((term) => !isHub(term));
+}
+
 const tripleKey = (s: Term, p: Term, o: Term) =>
   `${termKey(s)} ${termKey(p)} ${termKey(o)}`;
 
@@ -106,6 +145,15 @@ export class Reasoner {
   #ran = false;
   /** #asserted holds the triples given to add or extend, not what they entail. */
   #asserted = new Map<string, readonly [Term, Term, Term]>();
+  /**
+   * #parent and #owned index the asserted triples by connected component: a
+   * union-find over the keys of their non-vocabulary terms, and, per root, the
+   * keys of the triples in that component. A retraction does not split a
+   * component here, so an index can only be coarser than the truth until
+   * {@link Reasoner.retract} rebuilds the components it touched.
+   */
+  #parent = new Map<string, string>();
+  #owned = new Map<string, Set<string>>();
 
   constructor() {
     this.#init();
@@ -201,12 +249,20 @@ export class Reasoner {
    * even if it is entailed. The result equals a fresh run on everything
    * asserted but `triples`.
    *
-   * Only the connected component of the retracted triples is recomputed: the
-   * triples reachable from them through shared terms (vocabulary terms such as
-   * `rdf:type` do not connect). A component larger than
-   * {@link RetractOptions.maxScope}, one that reaches vocabulary terms
-   * through `owl:sameAs`, and a retraction touching only vocabulary terms
-   * recompute the whole closure instead.
+   * Retracting triples about individuals recomputes only their connected
+   * component: the triples reachable from them through shared subjects and
+   * objects. Classes and properties do not connect, because instances share
+   * them without depending on each other. The whole closure is recomputed
+   * instead when any retracted triple is schema (subclass, domain, restriction
+   * and so on), when the component is larger than
+   * {@link RetractOptions.maxScope}, or when it turns out not to be closed
+   * (a fact links it to another individual or to a complement class, or an
+   * asserted triple outside it names one of its terms).
+   *
+   * The result equals a fresh run for every input the differential test in
+   * `test/differential/` generates. Rules that derive schema-level facts from
+   * instance triples, other than the complement case handled above, are the
+   * known place this could be wrong.
    */
   retract(
     triples: Iterable<Triple>,
@@ -221,13 +277,62 @@ export class Reasoner {
     }
     if (gone.size === 0) return [];
     const scope = this.#component(gone);
-    const goneTriples = [...gone].map((key) => this.#asserted.get(key)!);
+    const goneTriples = new Map(
+      [...gone].map((key) => [key, this.#asserted.get(key)!] as const),
+    );
     for (const key of gone) this.#asserted.delete(key);
+    if (scope !== undefined) this.#reindex(scope, goneTriples);
     if (scope !== undefined && scope.size <= (options.maxScope ?? 50_000)) {
-      const removed = this.#recompute(scope, gone, goneTriples, view);
+      const removed = this.#recompute(
+        scope,
+        gone,
+        [...goneTriples.values()],
+        view,
+      );
       if (removed !== undefined) return removed;
     }
     return this.#rebuild(view);
+  }
+
+  /** nodes are the keys of the terms of a triple that connect components. */
+  #nodes(triple: readonly Term[]): string[] {
+    return connectors(triple).map(termKey);
+  }
+
+  #find(key: string): string {
+    let root = key;
+    while (this.#parent.get(root) !== root) root = this.#parent.get(root)!;
+    while (this.#parent.get(key) !== root) {
+      const next = this.#parent.get(key)!;
+      this.#parent.set(key, root);
+      key = next;
+    }
+    return root;
+  }
+
+  /** link files the asserted triple under the component of its terms. */
+  #link(key: string, triple: readonly Term[]): void {
+    const nodes = this.#nodes(triple);
+    if (nodes.length === 0) return;
+    for (const node of nodes) {
+      if (!this.#parent.has(node)) {
+        this.#parent.set(node, node);
+        this.#owned.set(node, new Set());
+      }
+    }
+    let root = this.#find(nodes[0]!);
+    for (let i = 1; i < nodes.length; i++) {
+      let other = this.#find(nodes[i]!);
+      if (other === root) continue;
+      if (this.#owned.get(other)!.size > this.#owned.get(root)!.size) {
+        [root, other] = [other, root];
+      }
+      const into = this.#owned.get(root)!;
+      for (const owned of this.#owned.get(other)!) into.add(owned);
+      this.#owned.delete(other);
+      this.#parent.set(other, root);
+    }
+    this.#owned.get(root)!.add(key);
   }
 
   /**
@@ -235,38 +340,41 @@ export class Reasoner {
    * or `undefined` when `gone` touches only vocabulary terms.
    */
   #component(gone: ReadonlySet<string>): Set<string> | undefined {
-    const parent = new Map<string, string>();
-    const find = (x: string): string => {
-      let root = x;
-      while (parent.get(root) !== root) root = parent.get(root)!;
-      while (parent.get(x) !== root) {
-        const next = parent.get(x)!;
-        parent.set(x, root);
-        x = next;
-      }
-      return root;
-    };
-    const nodes = (triple: readonly Term[]) =>
-      triple.filter((term) => !isHub(term)).map(termKey);
-    for (const triple of this.#asserted.values()) {
-      const keys = nodes(triple);
-      for (const key of keys) if (!parent.has(key)) parent.set(key, key);
-      for (let i = 1; i < keys.length; i++) {
-        parent.set(find(keys[i]!), find(keys[0]!));
-      }
-    }
     const roots = new Set<string>();
     for (const key of gone) {
-      const [first] = nodes(this.#asserted.get(key)!);
-      if (first !== undefined) roots.add(find(first));
+      if (!isInstance(this.#asserted.get(key)!)) return undefined;
+    }
+    for (const key of gone) {
+      const [first] = this.#nodes(this.#asserted.get(key)!);
+      if (first !== undefined) roots.add(this.#find(first));
     }
     if (roots.size === 0) return undefined;
     const scope = new Set<string>();
-    for (const [key, triple] of this.#asserted) {
-      const [first] = nodes(triple);
-      if (first !== undefined && roots.has(find(first))) scope.add(key);
+    for (const root of roots) {
+      for (const key of this.#owned.get(root)!) scope.add(key);
     }
     return scope;
+  }
+
+  /**
+   * reindex splits the components of `scope` again, now that the retracted
+   * triples are gone, so they do not stay merged for good.
+   */
+  #reindex(
+    scope: ReadonlySet<string>,
+    gone: ReadonlyMap<string, readonly [Term, Term, Term]>,
+  ): void {
+    const triple = (key: string) => this.#asserted.get(key) ?? gone.get(key)!;
+    const nodes = new Set<string>();
+    for (const key of scope) {
+      for (const node of this.#nodes(triple(key))) nodes.add(node);
+    }
+    for (const node of nodes) this.#owned.delete(this.#find(node));
+    for (const node of nodes) this.#parent.delete(node);
+    for (const key of scope) {
+      const kept = this.#asserted.get(key);
+      if (kept !== undefined) this.#link(key, kept);
+    }
   }
 
   /**
@@ -285,12 +393,11 @@ export class Reasoner {
     const engine = this.#engine;
     const terms = engine.terms;
     const equality = engine.equality;
-    const members: Term[] = goneTriples.flat();
+    const queue: Term[] = goneTriples.flatMap(connectors);
     for (const key of scope) {
-      if (!gone.has(key)) members.push(...this.#asserted.get(key)!);
+      if (!gone.has(key)) queue.push(...connectors(this.#asserted.get(key)!));
     }
     const ids = new Set<number>();
-    const queue = members.filter((term) => !isHub(term));
     while (queue.length > 0) {
       const term = queue.pop()!;
       const id = terms.lookup(term);
@@ -312,14 +419,24 @@ export class Reasoner {
           if (relation.name === INCONSISTENCY && column === 0) continue;
           const arg = fact.args[column]!;
           if (ids.has(arg)) continue;
-          const term = terms.term(arg);
-          if (!isHub(term) && !term.equals(NONE)) return undefined;
+          // Schema terms (classes, properties, vocabulary) are shared; another
+          // instance in a fact means the component is not closed.
+          const outside = terms.term(arg);
+          if (this.#parent.has(termKey(outside))) return undefined;
+          // A complement skolem was minted from these instances, and its own
+          // facts (which name no instance) would outlive the purge.
+          if (isSkolem(outside)) return undefined;
         }
       }
     }
     const before = new Map<string, Quad>();
     for (const fact of facts.get(this.#triples) ?? []) {
       for (const [s, p, o] of this.#expand(fact)) {
+        // An asserted triple outside the component that names one of its
+        // terms (a class used as an individual, say) would be purged and not
+        // asserted again, so the whole closure is recomputed instead.
+        const key = tripleKey(terms.term(s), terms.term(p), terms.term(o));
+        if (this.#asserted.has(key) && !scope.has(key)) return undefined;
         const quad = this.#quad(s, p, o, "complete");
         if (quad !== undefined) {
           before.set(
@@ -330,14 +447,15 @@ export class Reasoner {
       }
     }
     engine.purge(ids, facts);
-    const since = engine.tick();
+    engine.record();
     for (const key of scope) {
       const triple = this.#asserted.get(key);
       if (triple !== undefined) this.#store(...triple);
     }
     engine.run();
-    for (const fact of this.#triples.facts()) {
-      if (fact.bornAt < since) continue;
+    for (const fact of engine.stopRecording()) {
+      if (fact.diedAt !== Infinity) continue;
+      if (this.#triples.get(fact.key) !== fact) continue;
       for (const [s, p, o] of this.#expand(fact)) {
         before.delete(tripleKey(terms.term(s), terms.term(p), terms.term(o)));
       }
@@ -405,11 +523,12 @@ export class Reasoner {
   }
 
   #assert(subject: Term, predicate: Term, object: Term): void {
-    this.#asserted.set(tripleKey(subject, predicate, object), [
-      subject,
-      predicate,
-      object,
-    ]);
+    const key = tripleKey(subject, predicate, object);
+    if (!this.#asserted.has(key)) {
+      const triple = [subject, predicate, object] as const;
+      this.#asserted.set(key, triple);
+      this.#link(key, triple);
+    }
     this.#store(subject, predicate, object);
   }
 
