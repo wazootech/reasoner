@@ -1,7 +1,7 @@
 {
   "name": "@wazoo/reasoner",
   "description": "OWL 2 RL materialization over RDF/JS terms: semi-naive, indexed, with owl:sameAs as a union-find and incremental additions.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
   "exports": {
     ".": "./src/mod.ts"
