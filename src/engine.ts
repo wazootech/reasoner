@@ -58,6 +58,12 @@ export interface EngineOptions {
   readonly sameAs: Term;
   /** relations declares each relation the rules use, with its arity. */
   readonly relations: Readonly<Record<string, number>>;
+  /**
+   * contentTerm marks terms (literals, say) whose joining an equality class
+   * changes what rules read from it. When a class absorbs one, the facts of
+   * the surviving representative are re-seeded, as renamed facts are.
+   */
+  readonly contentTerm?: (term: Term) => boolean;
 }
 
 /** EngineStatistics summarize the work of the runs so far. */
@@ -91,6 +97,11 @@ export class Engine {
   #clock = 0;
   #delta = new Map<Relation, Fact[]>();
   #absorbed: number[] = [];
+  #contentTerm: ((term: Term) => boolean) | undefined;
+  /** #contentful holds the roots whose class has a content term. */
+  #contentful = new Set<number>();
+  /** #reseed holds roots whose class gained a content term in a merge. */
+  #reseed: number[] = [];
   #context: BuiltinContext;
 
   constructor(rules: readonly Rule[], options: EngineOptions) {
@@ -99,6 +110,7 @@ export class Engine {
     }
     this.#equalityRelation = this.relation(options.equalityRelation);
     this.#sameAs = this.terms.id(options.sameAs);
+    this.#contentTerm = options.contentTerm;
     this.#context = {
       term: (id) => this.terms.term(id),
       id: (term) => this.terms.id(term),
@@ -205,14 +217,20 @@ export class Engine {
       canonical[1] === equality.find(this.#sameAs) &&
       canonical[0] !== canonical[2]
     ) {
-      const absorbed = equality.union(
-        canonical[0]!,
-        canonical[2]!,
-        this.#clock,
-      );
+      const left = canonical[0]!;
+      const right = canonical[2]!;
+      const leftContent = this.#hasContent(left);
+      const rightContent = this.#hasContent(right);
+      const absorbed = equality.union(left, right, this.#clock);
       if (absorbed !== undefined) {
         this.statistics.merges++;
         this.#absorbed.push(absorbed);
+        const kept = absorbed === left ? right : left;
+        this.#contentful.delete(absorbed);
+        if (leftContent || rightContent) this.#contentful.add(kept);
+        if (absorbed === left ? leftContent : rightContent) {
+          this.#reseed.push(kept);
+        }
       }
       const root = equality.find(canonical[0]!);
       canonical[0] = root;
@@ -226,6 +244,15 @@ export class Engine {
     if (pending === undefined) this.#delta.set(relation, [fact]);
     else pending.push(fact);
     return true;
+  }
+
+  /** hasContent is `true` when the class of `root` holds a content term. */
+  #hasContent(root: number): boolean {
+    if (this.#contentTerm === undefined) return false;
+    if (this.equality.isTrivial(root)) {
+      return this.#contentTerm(this.terms.term(root));
+    }
+    return this.#contentful.has(root);
   }
 
   /**
@@ -245,6 +272,29 @@ export class Engine {
           }
         }
         relation.forget(absorbed);
+      }
+    }
+    // A class that absorbed a content term changed what rules read from it,
+    // so its representative's own facts (which are not renamed) are re-seeded
+    // too. A fact born this clock is already in the delta.
+    const reseed = this.#reseed;
+    this.#reseed = [];
+    const queued = new Set<Fact>();
+    for (const stale of reseed) {
+      const root = this.equality.find(stale);
+      for (const relation of this.#relations.values()) {
+        for (let column = 0; column < relation.arity; column++) {
+          for (const fact of relation.column(column, root)) {
+            if (
+              fact.diedAt !== Infinity || fact.bornAt >= this.#clock ||
+              queued.has(fact)
+            ) continue;
+            queued.add(fact);
+            const pending = this.#delta.get(relation);
+            if (pending === undefined) this.#delta.set(relation, [fact]);
+            else pending.push(fact);
+          }
+        }
       }
     }
   }
