@@ -28,6 +28,7 @@
     "fmt:check": "deno fmt --check",
     "lint": "deno lint",
     "test": "deno test --allow-read src/ test/unit/",
+    "test:differential": "deno run --allow-read test/differential/run.ts",
     "test:w3c": "deno run --allow-read --allow-write=.cache --allow-net=www.w3.org --allow-env test/w3c/run.ts",
     "test:w3c:update": "deno run --allow-read --allow-write=.cache,test/w3c/expected-pass.json --allow-net=www.w3.org --allow-env test/w3c/run.ts --update",
     "test:parity": "deno run --allow-read --allow-env test/parity/parity.ts",
