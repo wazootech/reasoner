@@ -37,6 +37,7 @@
   "New-Feature-NegativeDataPropertyAssertion-001",
   "New-Feature-NegativeObjectPropertyAssertion-001",
   "New-Feature-ObjectPropertyChain-001",
+  "New-Feature-ObjectPropertyChain-BJP-002",
   "New-Feature-ObjectPropertyChain-BJP-003",
   "New-Feature-ObjectPropertyChain-BJP-004",
   "New-Feature-ObjectQCR-002",

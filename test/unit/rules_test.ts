@@ -446,3 +446,14 @@ Deno.test("rule dt-not-type: an ill-typed literal is inconsistent", () => {
   const reasoner = closureOf(`ex:a ex:p "x"^^xsd:integer .`);
   assert(reasoner.inconsistencies().some((i) => i.rule === "dt-not-type"));
 });
+
+Deno.test("rule prp-trp-chain: a transitive property is its own (p p) chain", () => {
+  const r = closureOf(`ex:p a owl:TransitiveProperty .`);
+  const has = (view: "complete" | "application") =>
+    [...r.closure(view)].filter((q) =>
+      q.predicate.value === "http://www.w3.org/2002/07/owl#propertyChainAxiom"
+    ).length;
+  assert(has("complete") === 1);
+  // The skolem list is bookkeeping: the application view does not list it.
+  assert(has("application") === 0);
+});

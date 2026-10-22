@@ -11,7 +11,8 @@
 // Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
 import { dataFactory as df } from "@wazoo/sparql-engine/term";
-import { COMPLEMENT_PREFIX, Reasoner } from "@/mod.ts";
+import { Reasoner } from "@/mod.ts";
+import { isSkolemTerm } from "@/owl2rl/rules.ts";
 
 const E = "http://d.example/";
 const OWL = "http://www.w3.org/2002/07/owl#";
@@ -209,9 +210,7 @@ export interface Outcome {
  * not compared; the inconsistencies they lead to are.
  */
 function isSkolem(q: Quad): boolean {
-  return [q.subject, q.predicate, q.object].some((t) =>
-    t.termType === "NamedNode" && t.value.startsWith(COMPLEMENT_PREFIX)
-  );
+  return [q.subject, q.predicate, q.object].some(isSkolemTerm);
 }
 
 function outcome(r: Reasoner): Outcome {

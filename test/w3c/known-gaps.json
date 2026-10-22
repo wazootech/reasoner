@@ -1,5 +1,4 @@
 {
-  "New-Feature-ObjectPropertyChain-BJP-002": "The conclusion is the axiom SubObjectPropertyOf(ObjectPropertyChain(p p) p), entailed by TransitiveObjectProperty(p). The OWL 2 RL/RDF rule table (prp-trp, prp-spo2) only reads propertyChainAxiom; no rule concludes one, so the entailment is outside what the rules derive.",
   "WebOnt-I5.26-010": "The conclusion is a bare anonymous owl:Restriction (minCardinality 1 on p) used in no axiom. The RL rules only derive triples about terms already in the input and never create class expressions, so an existentially quantified class expression is not entailed.",
   "WebOnt-I5.5-005": "The conclusion is a bare anonymous owl:unionOf class over the premise class, used in no axiom. The RL rules never create class expressions, so it is not entailed."
 }

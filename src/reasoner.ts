@@ -5,9 +5,9 @@ import type { Fact, Relation } from "@/relation.ts";
 import { factKey } from "@/relation.ts";
 import {
   AXIOMS,
-  COMPLEMENT_PREFIX,
   complementSkolem,
   INCONSISTENCY,
+  isSkolemTerm,
   NONE,
   OWL2RL_RULES,
   RELATIONS,
@@ -22,10 +22,7 @@ import {
   XSD_NS,
 } from "@/owl2rl/vocabulary.ts";
 
-function isSkolem(term: Term): boolean {
-  return term.termType === "NamedNode" &&
-    term.value.startsWith(COMPLEMENT_PREFIX);
-}
+const isSkolem = isSkolemTerm;
 
 /** Triple is the part of a quad the reasoner reads; the graph is ignored. */
 export type Triple = Pick<Quad, "subject" | "predicate" | "object">;

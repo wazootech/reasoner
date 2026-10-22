@@ -72,6 +72,17 @@ export const NONE: NamedNode = dataFactory.namedNode(
 export const COMPLEMENT_PREFIX =
   "https://wazoo.dev/.well-known/genid/reasoner/complement/";
 
+/** CHAIN_PREFIX starts the skolem IRIs naming the list nodes of a derived chain. */
+export const CHAIN_PREFIX =
+  "https://wazoo.dev/.well-known/genid/reasoner/chain/";
+
+/** isSkolemTerm is `true` for a term the rules mint for their own bookkeeping. */
+export function isSkolemTerm(term: Term): boolean {
+  return term.termType === "NamedNode" &&
+    (term.value.startsWith(COMPLEMENT_PREFIX) ||
+      term.value.startsWith(CHAIN_PREFIX));
+}
+
 const v = variables();
 const ZERO = dataFactory.literal("0", XSD.nonNegativeInteger);
 const ONE = dataFactory.literal("1", XSD.nonNegativeInteger);
@@ -176,6 +187,25 @@ function complementHead(c: RuleArgument): Rule["head"] {
     t(v.notC, OWL.complementOf, c),
   ];
 }
+
+/**
+ * transitiveChain mints, for a transitive property `p`, the two list nodes of
+ * the chain `(p p)`. They are named after `p`, so every run mints the same ones.
+ */
+const transitiveChain = bind(
+  "transitive-chain",
+  [v.p],
+  [v.l1, v.l2],
+  (inputs, context) => {
+    const key = encodeURIComponent(
+      termKey(context.term(context.find(inputs[0]!))),
+    );
+    return [[
+      context.id(dataFactory.namedNode(`${CHAIN_PREFIX}${key}/1`)),
+      context.id(dataFactory.namedNode(`${CHAIN_PREFIX}${key}/2`)),
+    ]];
+  },
+);
 
 const same = filter(
   "same",
@@ -410,6 +440,19 @@ const propertyRules: Rule[] = [
     t(v.p, OWL.propertyChainAxiom, v.l),
     atom("chainPath", v.l, v.x, v.y),
   ], [t(v.x, v.p, v.y)]),
+  // Direct Semantics: TransitiveObjectProperty(p) entails the chain axiom
+  // SubObjectPropertyOf(ObjectPropertyChain(p p) p). Not in the RL table; the
+  // list is skolemized per property and hidden from the "application" view.
+  rule("prp-trp-chain", [
+    t(v.p, RDF.type, OWL.TransitiveProperty),
+    transitiveChain,
+  ], [
+    t(v.p, OWL.propertyChainAxiom, v.l1),
+    t(v.l1, RDF.first, v.p),
+    t(v.l1, RDF.rest, v.l2),
+    t(v.l2, RDF.first, v.p),
+    t(v.l2, RDF.rest, RDF.nil),
+  ]),
   rule("prp-spo2-transitive", [
     t(v.p, OWL.propertyChainAxiom, v.l),
     t(v.l, RDF.first, v.p),
