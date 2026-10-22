@@ -153,6 +153,44 @@ export class Engine {
     return this.#store(this.relation(relation), args);
   }
 
+  /**
+   * mentioning returns every live fact, per relation, that has one of `ids`
+   * in a column. Facts name class representatives, so `ids` should hold them.
+   */
+  mentioning(ids: ReadonlySet<number>): Map<Relation, Set<Fact>> {
+    const found = new Map<Relation, Set<Fact>>();
+    for (const relation of this.#relations.values()) {
+      const facts = new Set<Fact>();
+      for (const id of ids) {
+        for (let column = 0; column < relation.arity; column++) {
+          for (const fact of relation.column(column, id)) {
+            if (fact.diedAt === Infinity) facts.add(fact);
+          }
+        }
+      }
+      if (facts.size > 0) found.set(relation, facts);
+    }
+    return found;
+  }
+
+  /**
+   * purge retires `facts` (from {@link Engine.mentioning}) and splits the
+   * equality classes of `ids` back into single terms, leaving the engine as
+   * if those terms had never been mentioned. Assert their facts again and
+   * {@link Engine.run} to rebuild what remains true of them.
+   */
+  purge(ids: ReadonlySet<number>, facts: Map<Relation, Set<Fact>>): void {
+    this.#clock++;
+    for (const [relation, group] of facts) {
+      for (const fact of group) relation.retire(fact, this.#clock);
+    }
+    for (const relation of this.#relations.values()) {
+      for (const id of ids) relation.forget(id);
+    }
+    this.equality.reset(ids);
+    for (const id of ids) this.#contentful.delete(id);
+  }
+
   /** run evaluates the rules until no round derives a new fact. */
   run(): void {
     this.#settle();

@@ -89,6 +89,20 @@ export class Equality {
     return roots;
   }
 
+  /**
+   * reset makes every id in `ids` a class of its own again. `ids` must be
+   * closed under the classes it touches, or the survivors keep dangling links.
+   */
+  reset(ids: Iterable<number>): void {
+    for (const id of ids) {
+      if (id >= this.#parent.length) continue;
+      this.#parent[id] = id;
+      this.#size[id] = 1;
+      this.#linkedAt[id] = Infinity;
+      this.#members.delete(id);
+    }
+  }
+
   /** classes yields the representative of every class with two or more members. */
   classes(): IterableIterator<number> {
     return this.#members.keys();

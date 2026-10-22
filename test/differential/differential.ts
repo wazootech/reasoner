@@ -1,6 +1,12 @@
-// Differential oracle for Reasoner.extend(): a base graph plus a delta added
-// incrementally must give the same closure and inconsistencies as the whole
-// graph added up front. Seeded, so every failure is reproducible.
+// Differential oracles for Reasoner.extend() and Reasoner.retract().
+//
+// - extend: a base graph plus a delta added incrementally must give the same
+//   closure and inconsistencies as the whole graph added up front.
+// - retract: the whole graph with the delta retracted must equal a fresh run on
+//   the base alone, and the triples retract reports must be exactly the ones
+//   that fresh run lost. "retract-full" forces the whole-closure fallback.
+//
+// Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
 import { dataFactory as df } from "@wazoo/sparql-engine/term";
 import { Reasoner } from "@/mod.ts";
@@ -217,6 +223,26 @@ export function incremental(
   return outcome(r);
 }
 
+export type Mode = "extend" | "retract" | "retract-full";
+export const MODES: readonly Mode[] = ["extend", "retract", "retract-full"];
+
+/** retracted adds base and delta, runs, then retracts delta. */
+export function retracted(
+  base: readonly T3[],
+  delta: readonly T3[],
+  mode: Mode,
+): Outcome & { removed: Set<string> } {
+  const r = new Reasoner();
+  r.add([...base, ...delta].map(quad));
+  r.run();
+  const removed = r.retract(
+    delta.map(quad),
+    "complete",
+    mode === "retract-full" ? { maxScope: 0 } : {},
+  );
+  return { ...outcome(r), removed: new Set(removed.map(key)) };
+}
+
 export interface Diff {
   /** missing is in the full run but not in the incremental one. */
   missing: string[];
@@ -224,20 +250,42 @@ export interface Diff {
   extra: string[];
   missingInconsistencies: string[];
   extraInconsistencies: string[];
+  /** wrongRemoved is where retract's reported removals differ from the truth. */
+  wrongRemoved: string[];
 }
 
 function minus(a: Set<string>, b: Set<string>): string[] {
   return [...a].filter((x) => !b.has(x)).sort();
 }
 
-export function diff(base: readonly T3[], delta: readonly T3[]): Diff | null {
-  const f = full(base, delta);
-  const i = incremental(base, delta);
+export function diff(
+  base: readonly T3[],
+  delta: readonly T3[],
+  mode: Mode = "extend",
+): Diff | null {
+  let want: Outcome;
+  let got: Outcome;
+  let wrongRemoved: string[] = [];
+  if (mode === "extend") {
+    want = full(base, delta);
+    got = incremental(base, delta);
+  } else {
+    want = full(base, []);
+    const all = full(base, delta);
+    const r = retracted(base, delta, mode);
+    got = r;
+    const truth = minus(all.closure, want.closure);
+    wrongRemoved = [
+      ...minus(new Set(truth), r.removed),
+      ...minus(r.removed, new Set(truth)),
+    ];
+  }
   const d = {
-    missing: minus(f.closure, i.closure),
-    extra: minus(i.closure, f.closure),
-    missingInconsistencies: minus(f.inconsistencies, i.inconsistencies),
-    extraInconsistencies: minus(i.inconsistencies, f.inconsistencies),
+    missing: minus(want.closure, got.closure),
+    extra: minus(got.closure, want.closure),
+    missingInconsistencies: minus(want.inconsistencies, got.inconsistencies),
+    extraInconsistencies: minus(got.inconsistencies, want.inconsistencies),
+    wrongRemoved,
   };
   return Object.values(d).every((x) => x.length === 0) ? null : d;
 }
@@ -262,6 +310,7 @@ export function classify(d: Diff): string {
     d.extraInconsistencies.length
       ? `extra-inconsistency[${rules(d.extraInconsistencies)}]`
       : "",
+    d.wrongRemoved.length ? `wrong-removed[${preds(d.wrongRemoved)}]` : "",
   ].filter(Boolean).join(" ");
 }
 
@@ -273,9 +322,10 @@ export function shrink(
   base: T3[],
   delta: T3[],
   cls: string,
+  mode: Mode = "extend",
 ): { base: T3[]; delta: T3[] } {
   const still = (b: T3[], d: T3[]) => {
-    const x = diff(b, d);
+    const x = diff(b, d, mode);
     return x !== null && classify(x) === cls;
   };
   let changed = true;
@@ -303,6 +353,7 @@ export function shrink(
 
 export interface Failure {
   seed: number;
+  mode: Mode;
   cls: string;
   base: T3[];
   delta: T3[];
@@ -310,17 +361,23 @@ export interface Failure {
 }
 
 /** runSeed splits the seed's graph at a seeded random point and compares. */
-export function runSeed(seed: number): Failure | null {
+export function runSeed(seed: number, mode: Mode = "extend"): Failure | null {
   const triples = generate(seed);
   const rnd = prng(seed ^ 0x9E3779B9);
   const cut = 1 + Math.floor(rnd() * (triples.length - 1));
   const base = triples.slice(0, cut);
   const delta = triples.slice(cut);
-  const d = diff(base, delta);
+  const d = diff(base, delta, mode);
   if (d === null) return null;
-  const cls = classify(d);
-  const small = shrink(base, delta, cls);
-  return { seed, cls, ...small, diff: diff(small.base, small.delta)! };
+  const cls = `${mode}: ${classify(d)}`;
+  const small = shrink(base, delta, classify(d), mode);
+  return {
+    seed,
+    mode,
+    cls,
+    ...small,
+    diff: diff(small.base, small.delta, mode)!,
+  };
 }
 
 export const fmt = (ts: readonly T3[]) =>
