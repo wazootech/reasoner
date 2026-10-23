@@ -53,14 +53,15 @@ complement-class skolems, and types whose class is a blank node.
 
 ## Conformance
 
-- **W3C OWL 2 RL suite** (`deno task test:w3c`): 87 of 90 pass. The harness
+- **W3C OWL 2 RL suite** (`deno task test:w3c`): 88 of 90 pass. The harness
   reads tests given in OWL functional syntax (a subset, `functional-syntax.ts`),
   follows `owl:imports`, and ignores annotations in the conclusion of
-  Direct-Semantics tests. Three conclusions are not entailed, each with its
-  reason in `test/w3c/known-gaps.json`:
-  `New-Feature-ObjectPropertyChain-BJP-002` (no RL rule concludes a
-  `propertyChainAxiom`), and `WebOnt-I5.26-010` and `WebOnt-I5.5-005` (bare
+  Direct-Semantics tests. Two conclusions are not entailed, each with its reason
+  in `test/w3c/known-gaps.json`: `WebOnt-I5.26-010` and `WebOnt-I5.5-005` (bare
   anonymous class expressions, which the rules never create).
+  `New-Feature-ObjectPropertyChain-BJP-002` passes through a rule outside the RL
+  table, `prp-trp-chain`: a transitive property gets a skolem `(p p)` chain
+  axiom, which the `"application"` view hides.
 - **Parity with `rdfjs-inference-engine`** (`deno task test:parity`): identical
   closures on `bench-1e3`, `docs`, `micro`, and `owl-nosame`. On `owl` this
   package derives two extra triples, a documented divergence (`eq-rep` applied
