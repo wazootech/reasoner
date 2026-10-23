@@ -414,16 +414,157 @@ Deno.test("rule eq-ref is not materialized, as documented in rules.ts", () => {
   );
 });
 
-Deno.test("rule dt-eq is not materialized, as documented in rules.ts", () => {
+const SAME_AS = named(OWL + "sameAs");
+const EX_B = named("https://reasoner.example/b");
+const EX_P = named("https://reasoner.example/p");
+
+Deno.test("rule dt-eq: equal decimal-space values of different spellings are one class", () => {
   const reasoner = closureOf(
-    `ex:a ex:p "1"^^xsd:integer . ex:a ex:p "01"^^xsd:integer .`,
+    `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .
+ex:c ex:p "01"^^xsd:int . ex:d ex:p "+1.00"^^xsd:decimal .`,
+  );
+  const one = lit("1", "integer");
+  for (
+    const [v, d] of [["1.0", "decimal"], ["01", "int"], ["+1.00", "decimal"]]
+  ) {
+    assert(reasoner.has(one, SAME_AS, lit(v!, d!)), v);
+  }
+  // eq-rep-o: the subjects now hold every equal spelling.
+  assert(reasoner.has(EX_B, EX_P, one));
+  // The value spaces agree on types: "1.0"^^xsd:decimal is an xsd:integer value.
+  assertFalse(reasoner.inconsistencies().length > 0);
+  assert(reasoner.has(lit("1.0", "decimal"), RDF_TYPE, named(XSD + "integer")));
+});
+
+Deno.test("rule dt-eq: booleans true and 1 are the same value", () => {
+  const reasoner = closureOf(
+    `ex:a ex:p "true"^^xsd:boolean . ex:b ex:p "1"^^xsd:boolean .
+ex:c ex:p "false"^^xsd:boolean . ex:d ex:p "0"^^xsd:boolean .`,
+  );
+  assert(reasoner.has(lit("true", "boolean"), SAME_AS, lit("1", "boolean")));
+  assert(reasoner.has(lit("false", "boolean"), SAME_AS, lit("0", "boolean")));
+  assertFalse(
+    reasoner.has(lit("true", "boolean"), SAME_AS, lit("0", "boolean")),
+  );
+});
+
+Deno.test("rule dt-eq: different values, other datatypes, ill-typed and NaN stay apart", () => {
+  const reasoner = closureOf(
+    `ex:a ex:p "1"^^xsd:integer . ex:a ex:p "2"^^xsd:integer .
+ex:a ex:p "1" . ex:a ex:p "01" . ex:a ex:p "1"^^xsd:boolean .
+ex:a ex:p "2026-01-01T00:00:00Z"^^xsd:dateTime . ex:a ex:p "2026-01-01T01:00:00+01:00"^^xsd:dateTime .
+ex:a ex:p "x"^^xsd:integer . ex:a ex:p "NaN"^^xsd:double . ex:a ex:p "NaN"^^xsd:float .
+ex:a ex:p "0"^^xsd:double . ex:a ex:p "-0"^^xsd:double . ex:a ex:p "1.1"^^xsd:decimal . ex:a ex:p "1"^^xsd:double .`,
+  );
+  const no = (a: string, b: string) =>
+    assertFalse(
+      reasoner.has(
+        lit(a.split("|")[0]!, a.split("|")[1]!),
+        SAME_AS,
+        lit(b.split("|")[0]!, b.split("|")[1]!),
+      ),
+      a + " " + b,
+    );
+  no("1|integer", "2|integer");
+  no("1|integer", "1|boolean");
+  no("NaN|double", "NaN|float");
+  no("0|double", "-0|double");
+  no("1|integer", "1.1|decimal");
+  no("1|integer", "1|double");
+  assertFalse(
+    reasoner.has(
+      lit("2026-01-01T00:00:00Z", "dateTime"),
+      SAME_AS,
+      lit("2026-01-01T01:00:00+01:00", "dateTime"),
+    ),
+  );
+});
+
+Deno.test("rule dt-eq: floats equal floats and doubles equal doubles, never across spaces", () => {
+  const reasoner = closureOf(
+    `ex:a ex:p "1.1"^^xsd:double , "1.10"^^xsd:double , "1.1"^^xsd:float , "1.1"^^xsd:decimal .
+ex:b ex:p "1E21"^^xsd:double , "1000000000000000000000"^^xsd:double , "1000000000000000000000"^^xsd:integer .
+ex:c ex:p "0"^^xsd:float , "+0.0"^^xsd:float , "INF"^^xsd:float , "+INF"^^xsd:float .`,
+  );
+  assert(reasoner.has(lit("1.1", "double"), SAME_AS, lit("1.10", "double")));
+  assert(
+    reasoner.has(
+      lit("1E21", "double"),
+      SAME_AS,
+      lit("1000000000000000000000", "double"),
+    ),
+  );
+  assert(reasoner.has(lit("0", "float"), SAME_AS, lit("+0.0", "float")));
+  assert(reasoner.has(lit("INF", "float"), SAME_AS, lit("+INF", "float")));
+  assertFalse(reasoner.has(lit("1.1", "double"), SAME_AS, lit("1.1", "float")));
+  assertFalse(
+    reasoner.has(lit("1.1", "double"), SAME_AS, lit("1.1", "decimal")),
   );
   assertFalse(
     reasoner.has(
-      lit("1", "integer"),
-      named(OWL + "sameAs"),
-      lit("01", "integer"),
+      lit("1E21", "double"),
+      SAME_AS,
+      lit("1000000000000000000000", "integer"),
     ),
+  );
+  assertFalse(reasoner.has(lit("0", "float"), SAME_AS, lit("INF", "float")));
+});
+
+Deno.test("rule dt-eq: a functional property with equal-valued spellings is consistent", () => {
+  const reasoner = closureOf(
+    `ex:p a owl:FunctionalProperty . ex:a ex:p "1"^^xsd:integer , "1.0"^^xsd:decimal .`,
+  );
+  assertFalse(reasoner.inconsistencies().length > 0);
+});
+
+Deno.test("rule dt-eq: owl:differentFrom between equal values is inconsistent", () => {
+  const reasoner = closureOf(
+    `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .`,
+  );
+  reasoner.extend([
+    dataFactory.quad(
+      lit("1", "integer"),
+      named(OWL + "differentFrom"),
+      lit("1.0", "decimal"),
+    ),
+  ], "application");
+  assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
+});
+
+Deno.test("rule dt-eq: hasKey merges individuals whose keys are equal values", () => {
+  const reasoner = closureOf(
+    `ex:C owl:hasKey (ex:id) .
+ex:a a ex:C ; ex:id "1"^^xsd:integer . ex:b a ex:C ; ex:id "1.0"^^xsd:decimal .
+ex:c a ex:C ; ex:id "2"^^xsd:integer .`,
+  );
+  assert(
+    reasoner.has(
+      named("https://reasoner.example/a"),
+      SAME_AS,
+      named("https://reasoner.example/b"),
+    ),
+  );
+  assertFalse(
+    reasoner.has(
+      named("https://reasoner.example/a"),
+      SAME_AS,
+      named("https://reasoner.example/c"),
+    ),
+  );
+});
+
+Deno.test("rule dt-eq: a value met later joins its class (extend and retract)", () => {
+  const reasoner = closureOf(`ex:a ex:p "1"^^xsd:integer .`);
+  const parse = (turtle: string) => parseTurtleQuads(PREFIXES + turtle);
+  assertFalse(
+    reasoner.has(lit("1", "integer"), SAME_AS, lit("1.0", "decimal")),
+  );
+  const added = parse(`ex:b ex:p "1.0"^^xsd:decimal .`);
+  reasoner.extend(added, "application");
+  assert(reasoner.has(lit("1", "integer"), SAME_AS, lit("1.0", "decimal")));
+  reasoner.retract(added, "application");
+  assertFalse(
+    reasoner.has(lit("1", "integer"), SAME_AS, lit("1.0", "decimal")),
   );
 });
 
