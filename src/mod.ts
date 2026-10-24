@@ -9,8 +9,11 @@
  */
 export {
   type ClosureView,
+  DERIVED_GRAPH,
+  type GraphMode,
   type Inconsistency,
   Reasoner,
+  type ReasonerOptions,
   type RetractOptions,
   type Triple,
 } from "@/reasoner.ts";

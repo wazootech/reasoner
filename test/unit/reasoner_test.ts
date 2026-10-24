@@ -2,7 +2,7 @@ import { assert, assertEquals, assertFalse } from "@std/assert";
 import { parseTurtleQuads } from "@wazoo/sparql-engine/parser";
 import { dataFactory } from "@wazoo/sparql-engine/term";
 import type { Quad } from "@rdfjs/types";
-import { Reasoner } from "@/mod.ts";
+import { DERIVED_GRAPH, Reasoner, type ReasonerOptions } from "@/mod.ts";
 
 const EX = "https://reasoner.example/";
 const OWL = "http://www.w3.org/2002/07/owl#";
@@ -456,4 +456,159 @@ ex:k a owl:InverseFunctionalProperty .
 ex:a ex:id "1" ; ex:k ex:z . ex:b ex:id "2" ; ex:k ex:z .
 `);
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
+});
+
+// Named graphs.
+
+const graph = (name: string) => dataFactory.namedNode(EX + name);
+const RDFS_SUBCLASS = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
+
+function inGraph(g: ReturnType<typeof graph>, turtle: string): Quad[] {
+  return quads(turtle).map((q) =>
+    dataFactory.quad(q.subject, q.predicate, q.object, g)
+  );
+}
+
+/** listed is the graph of every closure quad for the triple, sorted. */
+function listed(r: Reasoner, s: string, p: string, o: string): string[] {
+  const term = (name: string) => name.includes(":") ? iri(name) : ex(name);
+  return [...r.closure("complete")]
+    .filter((q) =>
+      q.subject.equals(term(s)) && q.predicate.equals(term(p)) &&
+      q.object.equals(term(o))
+    )
+    .map((q) =>
+      q.graph.termType === "DefaultGraph"
+        ? "default"
+        : q.graph.equals(DERIVED_GRAPH)
+        ? "derived"
+        : q.graph.value.replace(EX, "")
+    )
+    .sort();
+}
+
+function twoGraphs(options?: ReasonerOptions): Reasoner {
+  const r = new Reasoner(options);
+  r.add(inGraph(graph("schema"), "ex:Student rdfs:subClassOf ex:Person ."));
+  r.add(inGraph(
+    graph("data"),
+    "ex:alice a ex:Student . ex:likes a owl:SymmetricProperty . ex:alice ex:likes ex:bob .",
+  ));
+  r.run();
+  return r;
+}
+
+Deno.test("per-graph: a triple from one graph's premises stays in that graph", () => {
+  const r = twoGraphs();
+  assertEquals(listed(r, "bob", "likes", "alice"), ["data"]);
+  assertEquals(listed(r, "alice", "likes", "bob"), ["data"]);
+  assertEquals(listed(r, "Student", RDFS_SUBCLASS, "Person"), ["schema"]);
+});
+
+Deno.test("per-graph: a cross-graph consequence goes in the derived graph", () => {
+  const r = twoGraphs();
+  assertEquals(listed(r, "alice", RDF_TYPE, "Person"), ["derived"]);
+  assert(r.has(ex("alice"), iri(RDF_TYPE), ex("Person")));
+  assert(r.has(ex("alice"), iri(RDF_TYPE), ex("Person"), DERIVED_GRAPH));
+  assertFalse(r.has(ex("alice"), iri(RDF_TYPE), ex("Person"), graph("data")));
+  assert(r.has(ex("alice"), iri(RDF_TYPE), ex("Student"), graph("data")));
+});
+
+Deno.test("union: every graph is one closure, listed in the default graph", () => {
+  const r = twoGraphs({ graphs: "union" });
+  assertEquals(listed(r, "alice", RDF_TYPE, "Person"), ["default"]);
+  assertEquals(listed(r, "bob", "likes", "alice"), ["default"]);
+  assert(
+    r.has(ex("alice"), iri(RDF_TYPE), ex("Person"), dataFactory.defaultGraph()),
+  );
+  assertFalse(r.has(ex("alice"), iri(RDF_TYPE), ex("Person"), graph("data")));
+});
+
+Deno.test("default graph only: both modes list everything in the default graph", () => {
+  for (const graphs of ["per-graph", "union"] as const) {
+    const r = new Reasoner({ graphs });
+    r.add(
+      quads("ex:Student rdfs:subClassOf ex:Person . ex:alice a ex:Student ."),
+    );
+    r.run();
+    assertEquals(listed(r, "alice", RDF_TYPE, "Person"), ["default"]);
+    assert([...r.closure()].every((q) => q.graph.termType === "DefaultGraph"));
+  }
+});
+
+Deno.test("per-graph: a triple asserted in two graphs is listed in both", () => {
+  const r = new Reasoner();
+  for (const name of ["a", "b"]) {
+    r.add(inGraph(graph(name), "ex:alice a ex:Student ."));
+  }
+  r.run();
+  assertEquals(listed(r, "alice", RDF_TYPE, "Student"), ["a", "b"]);
+});
+
+Deno.test("retract: a triple asserted in another graph stays entailed", () => {
+  const r = new Reasoner();
+  const a = inGraph(graph("a"), "ex:alice a ex:Student .");
+  r.add(a);
+  r.add(inGraph(graph("b"), "ex:alice a ex:Student ."));
+  r.add(inGraph(graph("b"), "ex:Student rdfs:subClassOf ex:Person ."));
+  r.run();
+  const removed = r.retract(a);
+  assertEquals(
+    removed.map((q) => q.graph.value.replace(EX, "")).sort(),
+    ["a"],
+  );
+  assert(r.has(ex("alice"), iri(RDF_TYPE), ex("Person")));
+  assertEquals(listed(r, "alice", RDF_TYPE, "Person"), ["b"]);
+});
+
+Deno.test("retract: dropping the schema graph's triple removes the derived quad", () => {
+  const r = twoGraphs();
+  const removed = r.retract(
+    inGraph(graph("schema"), "ex:Student rdfs:subClassOf ex:Person ."),
+    "application",
+  );
+  assert(
+    removed.some((q) =>
+      q.object.equals(ex("Person")) && q.graph.equals(DERIVED_GRAPH)
+    ),
+  );
+  assertFalse(r.has(ex("alice"), iri(RDF_TYPE), ex("Person")));
+});
+
+Deno.test("extend: new quads carry their graph", () => {
+  const r = twoGraphs();
+  const added = r.extend(
+    inGraph(graph("data"), "ex:carol a ex:Student ."),
+    "application",
+  );
+  const byObject = (name: string) =>
+    added.filter((q) => q.object.equals(ex(name))).map((q) =>
+      q.graph.equals(DERIVED_GRAPH) ? "derived" : q.graph.value.replace(EX, "")
+    );
+  assertEquals(byObject("Student"), ["data"]);
+  assertEquals(byObject("Person"), ["derived"]);
+});
+
+Deno.test("inconsistencies name the graph, or the derived graph", () => {
+  const r = new Reasoner();
+  r.add(inGraph(graph("one"), "ex:x a ex:A ."));
+  r.add(inGraph(graph("two"), "ex:A owl:disjointWith ex:B ."));
+  r.add(inGraph(graph("three"), "ex:x a ex:B ."));
+  r.add(
+    inGraph(
+      graph("four"),
+      "ex:c owl:sameAs ex:d . ex:c owl:differentFrom ex:d .",
+    ),
+  );
+  r.run();
+  const reports = r.inconsistencies().map((i) =>
+    `${i.rule}@${
+      i.graph.equals(DERIVED_GRAPH) ? "derived" : i.graph.value.replace(EX, "")
+    }`
+  ).sort();
+  // cls-com fires alongside cax-dw, so only these two rules are compared.
+  assertEquals(
+    [...new Set(reports)].filter((x) => /^(cax-dw|eq-diff1)@/.test(x)),
+    ["cax-dw@derived", "eq-diff1@four"],
+  );
 });

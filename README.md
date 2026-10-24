@@ -19,7 +19,7 @@ evidence for it is in
 import { Reasoner } from "@wazoo/reasoner";
 
 const reasoner = new Reasoner();
-reasoner.add(quads); // any RDF/JS triples; the graph term is ignored
+reasoner.add(quads); // RDF/JS quads; the graph term names the graph (see below)
 reasoner.run();
 for (const quad of reasoner.closure("application")) store.add(quad);
 reasoner.inconsistencies(); // [{ rule: "cax-dw", terms: [...] }, ...]
@@ -35,6 +35,28 @@ const removed = reasoner.retract(goneQuads, "application");
 what a graph store has no use for: literal subjects, reflexive `owl:sameAs`,
 complement-class skolems, and types whose class is a blank node.
 
+## Named graphs
+
+`new Reasoner()` reasons per graph by default;
+`new Reasoner({ graphs: "union" })` merges every graph into one closure listed
+in the default graph, as it did when the graph term was ignored. A caller that
+uses only the default graph sees no difference.
+
+In per-graph mode entailment still sees every graph, so a rule can join a
+subclass axiom in one graph with a typed instance in another. The graphs decide
+where a triple is _listed_: each entailed triple is in every graph that asserts
+it or whose own closure entails it, in the default graph when it is an axiomatic
+triple, and in `DERIVED_GRAPH` (`https://wazoo.dev/ns/reasoner#derived`) when
+only a combination of graphs entails it. `has(s, p, o, graph?)` takes the graph
+too, `inconsistencies()` names the graph (or the derived graph) whose closure
+violates each rule, and `extend` and `retract` return quads with their graphs. A
+triple asserted in two graphs stays asserted until it is retracted from both.
+
+With more than one graph, per-graph mode also computes the closure of each graph
+alone (lazily, once per change) and `extend`/`retract` diff the listings, so
+they cost a pass over the closure instead of just the change. Use one graph, or
+`"union"`, where that matters.
+
 ## Testing
 
 - `deno task ci`: format, lint, type-check, unit tests.
@@ -46,8 +68,11 @@ complement-class skolems, and types whose class is a blank node.
   that fails is a regression; `deno task test:w3c:update` records new passes.
 - `deno task test:differential [--seeds N]`: `Reasoner.extend` and `retract`
   against a fresh run on random graphs (modes extend, retract, retract-instance,
-  retract-full); exits 1 on a new failure class. CI runs 1000 seeds (about 7 s);
-  a nightly workflow runs 5000.
+  retract-full, and, with triples spread over four named graphs, union-extend,
+  union-retract, graphs-extend, graphs-retract, graphs-retract-partial; the
+  graph modes run on every third seed unless `--graph-stride 1`); exits 1 on a
+  new failure class. CI runs 1000 seeds (about 7 s); a nightly workflow
+  runs 5000.
 - `deno task bench`: closure time and memory on synthetic graphs
   (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
 

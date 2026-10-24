@@ -7,6 +7,15 @@
 //   that fresh run lost. "retract-instance" retracts only triples about
 //   individuals, the case retract recomputes locally; "retract-full" forces
 //   the whole-closure fallback.
+// - union-extend, union-retract: the same, with every triple asserted in one or
+//   two of four graphs and a Reasoner in "union" mode; the closure must equal
+//   the default-graph run, and every quad must be in the default graph.
+// - graphs-extend, graphs-retract, graphs-retract-partial: the same with a
+//   per-graph Reasoner, against an independent oracle built from default-graph
+//   Reasoners: a triple is listed in each graph whose own closure entails it,
+//   in the default graph when an axiom, and in the derived graph when only the
+//   union entails it. The retract-partial mode retracts one copy of a triple
+//   asserted in two graphs, which must stay asserted in the other.
 //
 // Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
@@ -196,8 +205,15 @@ function term(s: string) {
   return df.namedNode(E + s);
 }
 
-function quad([s, p, o]: T3): Quad {
-  return df.quad(term(s), term(p), term(o));
+function quadIn([s, p, o]: T3, graph?: string): Quad {
+  return df.quad(
+    term(s),
+    term(p),
+    term(o),
+    graph === undefined || graph === "default"
+      ? df.defaultGraph()
+      : df.namedNode(E + graph),
+  );
 }
 
 function key(q: Quad): string {
@@ -256,13 +272,217 @@ export type Mode =
   | "extend"
   | "retract"
   | "retract-instance"
-  | "retract-full";
+  | "retract-full"
+  | "union-extend"
+  | "union-retract"
+  | "graphs-extend"
+  | "graphs-retract"
+  | "graphs-retract-partial";
 export const MODES: readonly Mode[] = [
   "extend",
   "retract",
   "retract-instance",
   "retract-full",
+  "union-extend",
+  "union-retract",
+  "graphs-extend",
+  "graphs-retract",
+  "graphs-retract-partial",
 ];
+
+/** GQ is a triple asserted in a named graph ("default" is the default one). */
+type GQ = readonly [T3, string];
+const GRAPHS = ["default", "g1", "g2", "g3"];
+
+/**
+ * placements puts each triple in one graph, and some in a second one, both
+ * chosen by a hash of the triple so that shrinking a repro keeps them.
+ */
+function placements(ts: readonly T3[]): GQ[] {
+  const out: GQ[] = [];
+  for (const t of ts) {
+    let h = 2166136261;
+    for (const c of t.join(" ")) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    h >>>= 0;
+    const first = h % GRAPHS.length;
+    out.push([t, GRAPHS[first]!]);
+    if ((h >>> 8) % 4 === 0) {
+      out.push([t, GRAPHS[(first + 1 + ((h >>> 12) % 3)) % GRAPHS.length]!]);
+    }
+  }
+  return out;
+}
+
+const quad = (t: T3) => quadIn(t);
+const gquad = ([t, g]: GQ) => quadIn(t, g);
+const DERIVED = "https://wazoo.dev/ns/reasoner#derived";
+function nameOf(graph: Quad["graph"]): string {
+  if (graph.termType === "DefaultGraph") return "default";
+  return graph.value === DERIVED ? "derived" : graph.value.replace(E, "");
+}
+const gkey = (q: Quad) => `${nameOf(q.graph)}|${key(q)}`;
+
+/** graphOutcome reads a per-graph reasoner; every listed quad must be had. */
+function graphOutcome(r: Reasoner): Outcome {
+  const closure = new Set<string>();
+  for (const q of r.closure("complete")) {
+    if (isSkolem(q)) continue;
+    const k = gkey(q);
+    const had = r.has(q.subject, q.predicate, q.object, q.graph);
+    closure.add(had ? k : `!has ${k}`);
+  }
+  const inconsistencies = new Set(
+    r.inconsistencies().map((i) =>
+      `${nameOf(i.graph as Quad["graph"])}|${i.rule}`
+    ),
+  );
+  return { closure, inconsistencies };
+}
+
+/** Plain is what the oracle keeps of a default-graph run. */
+interface Plain {
+  closure: Set<string>;
+  rules: string[];
+}
+const plainCache = new Map<string, Plain>();
+
+/**
+ * plainRun is the default-graph closure of triples, the oracle's building
+ * block. Runs repeat across a seed's oracle calls, so they are memoized.
+ */
+function plainRun(ts: readonly T3[]): Plain {
+  const id = ts.map((t) => t.join(" ")).sort().join("|");
+  let plain = plainCache.get(id);
+  if (plain === undefined) {
+    const r = new Reasoner();
+    r.add(ts.map((t) => quad(t)));
+    r.run();
+    plain = {
+      closure: new Set(
+        [...r.closure("complete")].filter((q) => !isSkolem(q)).map(key),
+      ),
+      rules: r.inconsistencies().map((i) => i.rule),
+    };
+    if (plainCache.size > 4000) plainCache.clear();
+    plainCache.set(id, plain);
+  }
+  return plain;
+}
+
+/**
+ * oracle lists what a per-graph reasoner must give for `gqs`, from plain
+ * default-graph runs only: a triple is in each graph that asserts it or whose
+ * closure entails it, in the default graph when it is an axiom, and in the
+ * derived graph when only the union entails it.
+ */
+function oracle(gqs: readonly GQ[]): Outcome {
+  const byGraph = new Map<string, T3[]>();
+  for (const [t, g] of gqs) byGraph.set(g, [...(byGraph.get(g) ?? []), t]);
+  const axioms = plainRun([]).closure;
+  const union = plainRun(gqs.map(([t]) => t));
+  const alone = new Map<string, Set<string>>();
+  const asserted = new Map<string, Set<string>>();
+  const inconsistencies = new Set<string>();
+  const ruled = new Set<string>();
+  for (const [g, ts] of byGraph) {
+    const r = plainRun(ts);
+    alone.set(g, r.closure);
+    asserted.set(g, new Set(ts.map((t) => key(quad(t)))));
+    for (const rule of r.rules) {
+      inconsistencies.add(`${g}|${rule}`);
+      ruled.add(rule);
+    }
+  }
+  for (const rule of union.rules) {
+    if (!ruled.has(rule)) inconsistencies.add(`derived|${rule}`);
+  }
+  const closure = new Set<string>();
+  for (const k of union.closure) {
+    const labels = new Set<string>();
+    const axiom = axioms.has(k);
+    if (axiom) labels.add("default");
+    for (const g of byGraph.keys()) {
+      if (asserted.get(g)!.has(k) || (alone.get(g)!.has(k) && !axiom)) {
+        labels.add(g);
+      }
+    }
+    if (labels.size === 0) labels.add("derived");
+    for (const g of labels) closure.add(`${g}|${k}`);
+  }
+  return { closure, inconsistencies };
+}
+
+function plainOutcome(ts: readonly T3[]): Outcome {
+  const p = plainRun(ts);
+  return { closure: p.closure, inconsistencies: new Set(p.rules) };
+}
+
+/** graphDiff compares a graph-mode run against its oracle. */
+function graphDiff(
+  base: readonly T3[],
+  delta: readonly T3[],
+  mode: Mode,
+): Diff {
+  const union = mode.startsWith("union");
+  const kind = mode.replace(/^(union|graphs)-/, "");
+  const baseQ = placements(base);
+  const deltaQ = placements(delta);
+  const r = new Reasoner({ graphs: union ? "union" : "per-graph" });
+  /** read is the reasoner's outcome; union quads must all be default-graph. */
+  const read = (): Outcome => {
+    if (!union) return graphOutcome(r);
+    const o = outcome(r);
+    for (const q of r.closure("complete")) {
+      if (q.graph.termType !== "DefaultGraph") o.closure.add(`graph ${key(q)}`);
+    }
+    return o;
+  };
+  /** want is the oracle: plain runs for union, the labelled oracle otherwise. */
+  const want = (gqs: readonly GQ[]): Outcome =>
+    union ? plainOutcome(gqs.map(([t]) => t)) : oracle(gqs);
+  const listed = (q: Quad) => union ? key(q) : gkey(q);
+  const everything = [...baseQ, ...deltaQ];
+  let expected: Outcome;
+  let reportedQuads: Quad[];
+  let truth: string[];
+  if (kind === "extend") {
+    r.add(baseQ.map(gquad));
+    r.run();
+    reportedQuads = r.extend(deltaQ.map(gquad), "complete");
+    expected = want(everything);
+    truth = minus(expected.closure, want(baseQ).closure);
+  } else {
+    r.add(everything.map(gquad));
+    r.run();
+    // The partial mode retracts one copy of each triple; the rest stay.
+    const gone = kind === "retract"
+      ? deltaQ
+      : deltaQ.filter(([t, g]) => g === deltaQ.find(([u]) => u === t)![1]);
+    reportedQuads = r.retract(gone.map(gquad), "complete");
+    const goneIds = new Set(gone.map(([t, g]) => `${g}|${t.join(" ")}`));
+    expected = want(
+      everything.filter(([t, g]) => !goneIds.has(`${g}|${t.join(" ")}`)),
+    );
+    truth = minus(want(everything).closure, expected.closure);
+  }
+  const got = read();
+  const reported = new Set(
+    reportedQuads.filter((q) => !isSkolem(q)).map(listed),
+  );
+  return {
+    missing: minus(expected.closure, got.closure),
+    extra: minus(got.closure, expected.closure),
+    missingInconsistencies: minus(
+      expected.inconsistencies,
+      got.inconsistencies,
+    ),
+    extraInconsistencies: minus(got.inconsistencies, expected.inconsistencies),
+    wrongRemoved: [
+      ...minus(new Set(truth), reported),
+      ...minus(reported, new Set(truth)),
+    ],
+  };
+}
 
 /** isInstance mirrors which triples retract recomputes locally. */
 export function isInstance([, p, o]: T3): boolean {
@@ -314,6 +534,10 @@ export function diff(
   let want: Outcome;
   let got: Outcome;
   let wrongRemoved: string[] = [];
+  if (/^(union|graphs)-/.test(mode)) {
+    const g = graphDiff(base, delta, mode);
+    return Object.values(g).every((x) => x.length === 0) ? null : g;
+  }
   if (mode === "extend") {
     want = full(base, delta);
     got = incremental(base, delta);
