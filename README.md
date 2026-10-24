@@ -109,11 +109,11 @@ reasoner.addRule(anotherRule); // also fine after run(); recomputes once
   that fails is a regression; `deno task test:w3c:update` records new passes.
 - `deno task test:differential [--seeds N]`: `Reasoner.extend` and `retract`
   against a fresh run on random graphs (modes extend, retract, retract-instance,
-  retract-full, extend-custom, retract-custom, and, with triples spread over four named graphs, union-extend,
-  union-retract, graphs-extend, graphs-retract, graphs-retract-partial; the
-  graph modes run on every third seed unless `--graph-stride 1`); exits 1 on a
-  new failure class. CI runs 1000 seeds (about 7 s); a nightly workflow
-  runs 5000.
+  retract-full, extend-custom, retract-custom, and, with triples spread over
+  four named graphs, union-extend, union-retract, graphs-extend, graphs-retract,
+  graphs-retract-partial; the graph modes run on every third seed unless
+  `--graph-stride 1`); exits 1 on a new failure class. CI runs 1000 seeds (about
+  7 s); a nightly workflow runs 5000.
 - `deno task bench`: closure time and memory on synthetic graphs
   (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
 
