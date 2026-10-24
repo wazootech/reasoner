@@ -3,7 +3,7 @@
 An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 [`@wazoo/sparql-engine`](https://github.com/wazootech/sparql-engine).
 
-**Status: 0.3.0.** The OWL 2 RL ruleset, the semi-naive engine, `owl:sameAs` as
+**Status: 0.4.0.** The OWL 2 RL ruleset, the semi-naive engine, `owl:sameAs` as
 a union-find, incremental additions (`extend`) and retraction (`retract`) work,
 and `deno task test:differential` finds no difference between `extend` or
 `retract` and a fresh run on 5,000 random graphs. The Worlds integration has not
