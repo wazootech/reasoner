@@ -24,8 +24,14 @@ import {
 
 const isSkolem = isSkolemTerm;
 
-/** Triple is the part of a quad the reasoner reads; the graph is ignored. */
-export type Triple = Pick<Quad, "subject" | "predicate" | "object">;
+/**
+ * Triple is the part of a quad the reasoner reads. The optional `graph` names
+ * the graph the triple is asserted in (the default graph when absent); see
+ * {@link GraphMode}.
+ */
+export type Triple =
+  & Pick<Quad, "subject" | "predicate" | "object">
+  & { readonly graph?: Term };
 
 /**
  * ClosureView chooses which entailed triples a closure lists.
@@ -39,7 +45,7 @@ export type Triple = Pick<Quad, "subject" | "predicate" | "object">;
  */
 export type ClosureView = "complete" | "application";
 
-/** RetractOptions tune {@link Reasoner.retract}. */
+/** RetractOptions tune {@link Core.retract}. */
 export interface RetractOptions {
   /**
    * maxScope is how many asserted triples the connected component of a
@@ -119,24 +125,27 @@ export interface Inconsistency {
   readonly rule: string;
   /** terms are the terms the rule matched, in the rule's order. */
   readonly terms: readonly Term[];
+  /**
+   * graph is the graph whose own closure violates the rule, or
+   * {@link DERIVED_GRAPH} when only a combination of graphs does. It is the
+   * default graph in `"union"` mode and when only the default graph is used.
+   */
+  readonly graph: Term;
 }
 
+type CoreInconsistency = Omit<Inconsistency, "graph">;
+
 /**
- * Reasoner materializes the OWL 2 RL closure of the triples it is given.
+ * Core materializes the OWL 2 RL closure of the triples it is given, as one
+ * graph: it ignores the graph term. {@link Reasoner} layers named graphs on top
+ * of it.
  *
- * ```ts
- * const reasoner = new Reasoner();
- * reasoner.add(quads);
- * reasoner.run();
- * for (const quad of reasoner.closure()) graph.add(quad);
- * ```
- *
- * {@link Reasoner.extend} adds more triples to a closure that is already
+ * {@link Core.extend} adds more triples to a closure that is already
  * computed and returns only what they entail that was not entailed before,
- * evaluating only the rules the new facts can reach. {@link Reasoner.retract}
+ * evaluating only the rules the new facts can reach. {@link Core.retract}
  * removes asserted triples and what only they entailed.
  */
-export class Reasoner {
+class Core {
   #engine!: Engine;
   #triples!: Relation;
   #ran = false;
@@ -147,7 +156,7 @@ export class Reasoner {
    * union-find over the keys of their non-vocabulary terms, and, per root, the
    * keys of the triples in that component. A retraction does not split a
    * component here, so an index can only be coarser than the truth until
-   * {@link Reasoner.retract} rebuilds the components it touched.
+   * {@link Core.retract} rebuilds the components it touched.
    */
   #parent = new Map<string, string>();
   #owned = new Map<string, Set<string>>();
@@ -179,7 +188,7 @@ export class Reasoner {
     return this.#triples.size;
   }
 
-  /** add queues triples for the next {@link Reasoner.run}. */
+  /** add queues triples for the next {@link Core.run}. */
   add(triples: Iterable<Triple>): void {
     for (const triple of triples) {
       this.#assert(triple.subject, triple.predicate, triple.object);
@@ -504,11 +513,11 @@ export class Reasoner {
   }
 
   /** inconsistencies lists every OWL 2 RL `false` rule the closure violates. */
-  inconsistencies(): Inconsistency[] {
+  inconsistencies(): CoreInconsistency[] {
     if (!this.#ran) this.run();
     const terms = this.#engine.terms;
     const none = terms.id(NONE);
-    const reports: Inconsistency[] = [];
+    const reports: CoreInconsistency[] = [];
     for (const fact of this.#engine.relation(INCONSISTENCY).facts()) {
       const [rule, ...matched] = fact.args;
       reports.push({
@@ -566,5 +575,365 @@ export class Reasoner {
       predicate as NamedNode,
       object as Quad["object"],
     );
+  }
+}
+
+/**
+ * DERIVED_GRAPH is the graph a triple lands in when it is entailed only by a
+ * combination of graphs: no single graph entails it on its own.
+ */
+export const DERIVED_GRAPH: NamedNode = dataFactory.namedNode(
+  "https://wazoo.dev/ns/reasoner#derived",
+);
+
+/**
+ * GraphMode chooses how a {@link Reasoner} treats the graph term of a quad.
+ *
+ * - `"per-graph"` (the default) keeps graphs apart. The closure lists each
+ *   entailed triple in the graphs whose own closure entails it. A triple that
+ *   is entailed only by premises from several graphs goes in
+ *   {@link DERIVED_GRAPH}. Triples entailed by no premise at all (the axiomatic
+ *   triples) are in the default graph. Entailment itself still sees every
+ *   graph, so cross-graph consequences are found and nothing is lost; the
+ *   graphs only decide where each triple is listed.
+ * - `"union"` merges every graph into one closure, as if the graph term were
+ *   ignored, and lists it all in the default graph.
+ *
+ * Callers that use only the default graph get the same closure in both modes.
+ */
+export type GraphMode = "per-graph" | "union";
+
+/** ReasonerOptions configure a {@link Reasoner}. */
+export interface ReasonerOptions {
+  /** graphs is the {@link GraphMode}. Defaults to `"per-graph"`. */
+  readonly graphs?: GraphMode;
+}
+
+const DEFAULT_KEY = termKey(dataFactory.defaultGraph());
+const DERIVED_KEY = termKey(DERIVED_GRAPH);
+
+const graphKey = (graph: Term | undefined): string =>
+  graph === undefined ? DEFAULT_KEY : termKey(graph);
+
+let baseKeys: Set<string> | undefined;
+/** base is the triples entailed by nothing: the axiomatic triples. */
+function base(): Set<string> {
+  if (baseKeys === undefined) {
+    baseKeys = new Set();
+    for (const q of new Core().closure("complete")) {
+      baseKeys.add(tripleKey(q.subject, q.predicate, q.object));
+    }
+  }
+  return baseKeys;
+}
+
+/** PerGraph is the closure of one graph taken alone. */
+interface PerGraph {
+  readonly core: Core;
+  readonly keys: Set<string>;
+}
+
+/**
+ * Reasoner materializes the OWL 2 RL closure of the quads it is given, with
+ * named graphs (see {@link GraphMode}).
+ *
+ * ```ts
+ * const reasoner = new Reasoner();
+ * reasoner.add(quads);
+ * reasoner.run();
+ * for (const quad of reasoner.closure()) store.add(quad);
+ * ```
+ *
+ * {@link Reasoner.extend} adds more quads to a closure that is already
+ * computed and returns only what they entail that was not entailed before,
+ * evaluating only the rules the new facts can reach. {@link Reasoner.retract}
+ * removes asserted quads and what only they entailed. A triple asserted in two
+ * graphs stays asserted until it is retracted from both.
+ *
+ * Internally one incremental closure holds the union of all graphs. With more
+ * than one graph in `"per-graph"` mode, the closure of each graph alone is also
+ * computed, lazily, to decide which graphs list a triple; `extend` and
+ * `retract` then diff the listings, which costs a pass over the closure.
+ */
+export class Reasoner {
+  readonly #mode: GraphMode;
+  readonly #union = new Core();
+  /** #graphs are the graphs with asserted triples, and those triples. */
+  readonly #graphs = new Map<
+    string,
+    { graph: Term; triples: Map<string, Triple> }
+  >();
+  /** #refs counts the graphs each asserted triple is asserted in. */
+  readonly #refs = new Map<string, number>();
+  #per: Map<string, PerGraph> | undefined;
+
+  constructor(options: ReasonerOptions = {}) {
+    this.#mode = options.graphs ?? "per-graph";
+  }
+
+  /** statistics count rounds, derivations, and merges across every run. */
+  get statistics(): Readonly<EngineStatistics> {
+    return this.#union.statistics;
+  }
+
+  /** size is the number of stored facts, before equality classes expand. */
+  get size(): number {
+    return this.#union.size;
+  }
+
+  /** add queues quads for the next {@link Reasoner.run}. */
+  add(quads: Iterable<Triple>): void {
+    const all = [...quads];
+    for (const quad of all) this.#register(quad);
+    this.#union.add(all);
+  }
+
+  /** run computes the closure of everything added so far. */
+  run(): void {
+    this.#union.run();
+  }
+
+  /**
+   * extend adds `quads` to the computed closure and returns the quads of the
+   * closure that are new: the added ones when they were not already entailed in
+   * their graph, and everything they entail.
+   */
+  extend(quads: Iterable<Triple>, view: ClosureView = "complete"): Quad[] {
+    const all = [...quads];
+    const after = new Set(this.#graphs.keys());
+    for (const quad of all) after.add(graphKey(quad.graph));
+    const diffing = this.#mode === "per-graph" && after.size > 1;
+    const before = diffing ? this.#listing() : undefined;
+    for (const quad of all) this.#register(quad);
+    const added = this.#union.extend(all, diffing ? "complete" : view);
+    if (before === undefined) return this.#label(added);
+    return this.#difference(this.#listing(), before, view);
+  }
+
+  /**
+   * retract removes asserted `quads` and returns the quads of the closure that
+   * are no longer entailed. A quad that was not asserted in its graph is
+   * ignored, even if it is entailed. The result equals a fresh run on
+   * everything asserted but `quads`.
+   */
+  retract(
+    quads: Iterable<Triple>,
+    view: ClosureView = "complete",
+    options: RetractOptions = {},
+  ): Quad[] {
+    const gone = new Map<string, Triple>();
+    const counts = new Map<string, number>();
+    for (const quad of quads) {
+      const key = tripleKey(quad.subject, quad.predicate, quad.object);
+      const id = `${graphKey(quad.graph)}\0${key}`;
+      if (gone.has(id)) continue;
+      if (this.#graphs.get(graphKey(quad.graph))?.triples.has(key)) {
+        gone.set(id, quad);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    if (gone.size === 0) return [];
+    const diffing = this.#mode === "per-graph" && this.#graphs.size > 1;
+    const before = diffing ? this.#listing() : undefined;
+    // A triple asserted in another graph too stays asserted.
+    const lost: Triple[] = [];
+    for (const quad of gone.values()) {
+      const key = tripleKey(quad.subject, quad.predicate, quad.object);
+      if (this.#refs.get(key) === counts.get(key)) lost.push(quad);
+    }
+    const removed = this.#union.retract(
+      lost,
+      diffing ? "complete" : view,
+      options,
+    );
+    // Labels come from the graphs as they were, so label before unregistering.
+    const labelled = before === undefined ? this.#label(removed) : [];
+    for (const quad of gone.values()) this.#unregister(quad);
+    if (before === undefined) return labelled;
+    return this.#difference(before, this.#listing(), view);
+  }
+
+  /**
+   * closure yields every quad of the closure, the axiomatic triples included,
+   * with each `owl:sameAs` class expanded to its members. See
+   * {@link GraphMode} for which graph lists each triple.
+   */
+  *closure(view: ClosureView = "complete"): Generator<Quad> {
+    if (this.#plain) {
+      yield* this.#union.closure(view);
+      return;
+    }
+    for (const quad of this.#union.closure(view)) {
+      yield* this.#label([quad]);
+    }
+  }
+
+  /**
+   * has is `true` when the closure entails the triple. With a `graph`, it is
+   * `true` only when that graph lists the triple. In `"union"` mode the closure
+   * is all in the default graph, so any other `graph` gives `false`.
+   */
+  has(subject: Term, predicate: Term, object: Term, graph?: Term): boolean {
+    if (!this.#union.has(subject, predicate, object)) return false;
+    if (graph === undefined) return true;
+    const key = graphKey(graph);
+    if (this.#plain) return key === DEFAULT_KEY;
+    return this.#labelsOf(tripleKey(subject, predicate, object)).includes(key);
+  }
+
+  /**
+   * inconsistencies lists every OWL 2 RL `false` rule the closure violates.
+   * Each names the graph whose own closure violates the rule, or
+   * {@link DERIVED_GRAPH} for a rule violated only by combining graphs.
+   */
+  inconsistencies(): Inconsistency[] {
+    const all = this.#union.inconsistencies();
+    if (this.#plain) {
+      const graph = dataFactory.defaultGraph();
+      return all.map((report) => ({ ...report, graph }));
+    }
+    if (!this.#multi) {
+      const [{ graph }] = this.#graphs.values();
+      return all.map((report) => ({ ...report, graph }));
+    }
+    const reports: Inconsistency[] = [];
+    const known = new Set<string>();
+    for (const [key, { core }] of this.#perGraphs()) {
+      for (const report of core.inconsistencies()) {
+        known.add(report.rule);
+        reports.push({ ...report, graph: this.#graphTerm(key) });
+      }
+    }
+    for (const report of all) {
+      if (!known.has(report.rule)) {
+        reports.push({ ...report, graph: DERIVED_GRAPH });
+      }
+    }
+    return reports;
+  }
+
+  /** #plain is `true` when every triple is listed in the default graph. */
+  get #plain(): boolean {
+    if (this.#mode === "union" || this.#graphs.size === 0) return true;
+    return this.#graphs.size === 1 && this.#graphs.has(DEFAULT_KEY);
+  }
+
+  /** #multi is `true` when per-graph closures are needed to label triples. */
+  get #multi(): boolean {
+    return this.#mode === "per-graph" && this.#graphs.size > 1;
+  }
+
+  #register(quad: Triple): void {
+    const key = tripleKey(quad.subject, quad.predicate, quad.object);
+    const gk = graphKey(quad.graph);
+    let entry = this.#graphs.get(gk);
+    if (entry === undefined) {
+      entry = {
+        graph: quad.graph ?? dataFactory.defaultGraph(),
+        triples: new Map(),
+      };
+      this.#graphs.set(gk, entry);
+    }
+    if (entry.triples.has(key)) return;
+    entry.triples.set(key, quad);
+    this.#refs.set(key, (this.#refs.get(key) ?? 0) + 1);
+    this.#per = undefined;
+  }
+
+  #unregister(quad: Triple): void {
+    const key = tripleKey(quad.subject, quad.predicate, quad.object);
+    const gk = graphKey(quad.graph);
+    const entry = this.#graphs.get(gk)!;
+    entry.triples.delete(key);
+    if (entry.triples.size === 0) this.#graphs.delete(gk);
+    const refs = this.#refs.get(key)! - 1;
+    if (refs === 0) this.#refs.delete(key);
+    else this.#refs.set(key, refs);
+    this.#per = undefined;
+  }
+
+  /** #perGraphs computes the closure of each graph alone, once per change. */
+  #perGraphs(): Map<string, PerGraph> {
+    if (this.#per !== undefined) return this.#per;
+    const per = new Map<string, PerGraph>();
+    for (const [key, { triples }] of this.#graphs) {
+      const core = new Core();
+      core.add(triples.values());
+      core.run();
+      const keys = new Set<string>();
+      for (const q of core.closure("complete")) {
+        keys.add(tripleKey(q.subject, q.predicate, q.object));
+      }
+      per.set(key, { core, keys });
+    }
+    return this.#per = per;
+  }
+
+  #graphTerm(key: string): Term {
+    if (key === DEFAULT_KEY) return dataFactory.defaultGraph();
+    if (key === DERIVED_KEY) return DERIVED_GRAPH;
+    return this.#graphs.get(key)!.graph;
+  }
+
+  /**
+   * #labelsOf returns the keys of the graphs that list an entailed triple: the
+   * default graph for an axiom, each graph that asserts it or entails it alone,
+   * else the derived graph.
+   */
+  #labelsOf(key: string): string[] {
+    const labels = new Set<string>();
+    const axiom = base().has(key);
+    if (axiom) labels.add(DEFAULT_KEY);
+    const per = this.#multi ? this.#perGraphs() : undefined;
+    for (const [gk, { triples }] of this.#graphs) {
+      const alone = per === undefined || per.get(gk)!.keys.has(key);
+      if (triples.has(key) || (alone && !axiom)) labels.add(gk);
+    }
+    if (labels.size === 0) labels.add(DERIVED_KEY);
+    return [...labels];
+  }
+
+  /** #label places each default-graph quad of the closure in its graphs. */
+  #label(quads: readonly Quad[]): Quad[] {
+    if (this.#plain) return [...quads];
+    const out: Quad[] = [];
+    for (const { subject, predicate, object } of quads) {
+      const key = tripleKey(subject, predicate, object);
+      for (const gk of this.#labelsOf(key)) {
+        out.push(dataFactory.quad(
+          subject,
+          predicate,
+          object,
+          this.#graphTerm(gk) as Quad["graph"],
+        ));
+      }
+    }
+    return out;
+  }
+
+  /** #listing is the complete closure keyed by graph and triple. */
+  #listing(): Map<string, Quad> {
+    const listing = new Map<string, Quad>();
+    for (const quad of this.closure("complete")) {
+      const key = tripleKey(quad.subject, quad.predicate, quad.object);
+      listing.set(`${graphKey(quad.graph)}\0${key}`, quad);
+    }
+    return listing;
+  }
+
+  /** #difference lists the quads of `from` that `without` lacks, in `view`. */
+  #difference(
+    from: Map<string, Quad>,
+    without: Map<string, Quad>,
+    view: ClosureView,
+  ): Quad[] {
+    const out: Quad[] = [];
+    for (const [key, quad] of from) {
+      if (
+        !without.has(key) &&
+        shown(quad.subject, quad.predicate, quad.object, view)
+      ) out.push(quad);
+    }
+    return out;
   }
 }

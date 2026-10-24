@@ -1,4 +1,4 @@
-// Usage: deno task test:differential [--seeds N] [--verbose]
+// Usage: deno task test:differential [--seeds N] [--graph-stride K] [--verbose]
 // Exits 1 when a failure class is not in expected-failures.json, or when a
 // pinned repro in it no longer fails with its class (so the list cannot rot).
 import { classify, diff, fmt, MODES, runSeed } from "./differential.ts";
@@ -6,6 +6,11 @@ import type { Failure, Mode, T3 } from "./differential.ts";
 
 const at = Deno.args.indexOf("--seeds");
 const SEEDS = at >= 0 ? Number(Deno.args[at + 1]) : 1000;
+// The named-graph modes build a reasoner per graph and cost about ten times
+// the others, so by default they run on every third seed; --graph-stride 1
+// runs them on every seed.
+const strideAt = Deno.args.indexOf("--graph-stride");
+const STRIDE = strideAt >= 0 ? Number(Deno.args[strideAt + 1]) : 3;
 const verbose = Deno.args.includes("--verbose");
 interface Expected {
   mode?: Mode;
@@ -22,6 +27,7 @@ const expected: Record<string, Expected> = JSON.parse(
 const classes = new Map<string, { count: number; smallest: Failure }>();
 for (let seed = 1; seed <= SEEDS; seed++) {
   for (const mode of MODES) {
+    if (/^(union|graphs)-/.test(mode) && seed % STRIDE !== 0) continue;
     const f = runSeed(seed, mode);
     if (f === null) continue;
     const c = classes.get(f.cls);
