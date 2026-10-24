@@ -212,3 +212,28 @@ Deno.test("extend sees a rule constant that is merged into another term", () => 
     }
   }
 });
+
+Deno.test("custom rules join across graphs and apply per graph", () => {
+  const g1 = ex("g1");
+  const g2 = ex("g2");
+  const r = new Reasoner({ rules: [grandparent] });
+  r.add([
+    df.quad(ex("a"), ex("parent"), ex("b"), g1),
+    df.quad(ex("b"), ex("parent"), ex("c"), g2),
+  ]);
+  r.run();
+  // Entailment sees both graphs, so the derived triple exists; neither graph
+  // entails it alone, so it is listed in the derived graph.
+  assert(r.has(ex("a"), ex("grandparent"), ex("c")));
+  assertFalse(r.has(ex("a"), ex("grandparent"), ex("c"), g1));
+  // A rule added later reaches graphs whose closure is already computed.
+  const late = new Reasoner();
+  late.add([
+    df.quad(ex("a"), ex("parent"), ex("b"), g1),
+    df.quad(ex("b"), ex("parent"), ex("c"), g1),
+    df.quad(ex("x"), ex("q"), ex("y"), g2),
+  ]);
+  late.run();
+  late.addRule(grandparent);
+  assert(late.has(ex("a"), ex("grandparent"), ex("c"), g1));
+});
