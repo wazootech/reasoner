@@ -57,6 +57,47 @@ alone (lazily, once per change) and `extend`/`retract` diff the listings, so
 they cost a pass over the closure instead of just the change. Use one graph, or
 `"union"`, where that matters.
 
+## Custom rules
+
+Register Datalog-style rules over triple patterns, in the constructor or with
+`addRule`. A pattern is `[subject, predicate, object]`; each position is an
+RDF/JS term or a variable from `variables()`.
+
+```ts
+import { Reasoner, variables } from "@wazoo/reasoner";
+
+const { x, y, z } = variables();
+const reasoner = new Reasoner({
+  rules: [
+    {
+      name: "grandparent",
+      body: [[x, parent, y], [y, parent, z]],
+      head: [[x, grandparent, z]],
+    },
+    {
+      name: "no-self-parent", // reported as Inconsistency.rule
+      body: [[x, parent, x]],
+      inconsistent: [x], // up to five terms
+    },
+  ],
+});
+reasoner.addRule(anotherRule); // also fine after run(); recomputes once
+```
+
+- Custom rules run in the same semi-naive fixpoint as the OWL 2 RL rules, so
+  they see derived triples and `owl:sameAs` classes, and their heads feed the
+  OWL rules. A head may derive `owl:sameAs`.
+- Derived triples are ordinary triples of the closure. `closure("complete")`
+  lists them; `closure("application")` lists them under the same filters as any
+  other triple (literal subjects, reflexive `owl:sameAs`, skolems and blank-node
+  classes are omitted).
+- `extend` stays incremental. `retract` does not: with any custom rule
+  registered it recomputes the whole closure (the result still equals a fresh
+  run), because a custom rule can relate any triples.
+- An invalid rule throws an `Error`: unbound head variable, empty body, no head
+  and no `inconsistent`, a literal or blank-node head predicate, a duplicate
+  name, or a name that is an OWL 2 RL rule name.
+
 ## Testing
 
 - `deno task ci`: format, lint, type-check, unit tests.
@@ -68,11 +109,11 @@ they cost a pass over the closure instead of just the change. Use one graph, or
   that fails is a regression; `deno task test:w3c:update` records new passes.
 - `deno task test:differential [--seeds N]`: `Reasoner.extend` and `retract`
   against a fresh run on random graphs (modes extend, retract, retract-instance,
-  retract-full, and, with triples spread over four named graphs, union-extend,
-  union-retract, graphs-extend, graphs-retract, graphs-retract-partial; the
-  graph modes run on every third seed unless `--graph-stride 1`); exits 1 on a
-  new failure class. CI runs 1000 seeds (about 7 s); a nightly workflow
-  runs 5000.
+  retract-full, extend-custom, retract-custom, and, with triples spread over
+  four named graphs, union-extend, union-retract, graphs-extend, graphs-retract,
+  graphs-retract-partial; the graph modes run on every third seed unless
+  `--graph-stride 1`); exits 1 on a new failure class. CI runs 1000 seeds (about
+  7 s); a nightly workflow runs 5000.
 - `deno task bench`: closure time and memory on synthetic graphs
   (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
 

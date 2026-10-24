@@ -102,6 +102,10 @@ export class Engine {
   #contentful = new Set<number>();
   /** #reseed holds roots whose class gained a content term in a merge. */
   #reseed: number[] = [];
+  /** #constants are the term ids that appear as constants in a rule. */
+  #constants = new Set<number>();
+  /** #constantRoots holds the roots whose class has a rule constant. */
+  #constantRoots = new Set<number>();
   #context: BuiltinContext;
   #recorded: Fact[] | undefined;
 
@@ -201,7 +205,11 @@ export class Engine {
       for (const id of ids) relation.forget(id);
     }
     this.equality.reset(ids);
-    for (const id of ids) this.#contentful.delete(id);
+    for (const id of ids) {
+      this.#contentful.delete(id);
+      this.#constantRoots.delete(id);
+      if (this.#constants.has(id)) this.#constantRoots.add(id);
+    }
   }
 
   /** run evaluates the rules until no round derives a new fact. */
@@ -272,11 +280,22 @@ export class Engine {
       const right = canonical[2]!;
       const leftContent = this.#hasContent(left);
       const rightContent = this.#hasContent(right);
+      const leftConstant = this.#constantRoots.has(left);
+      const rightConstant = this.#constantRoots.has(right);
       const absorbed = equality.union(left, right, this.#clock);
       if (absorbed !== undefined) {
         this.statistics.merges++;
         this.#absorbed.push(absorbed);
         const kept = absorbed === left ? right : left;
+        this.#constantRoots.delete(absorbed);
+        if (leftConstant || rightConstant) this.#constantRoots.add(kept);
+        // A rule constant that joins the class of a surviving representative
+        // (even one that has a constant of its own) now matches that
+        // representative's own facts, which are not renamed, so they are
+        // re-seeded.
+        if (absorbed === left ? leftConstant : rightConstant) {
+          this.#reseed.push(kept);
+        }
         this.#contentful.delete(absorbed);
         if (leftContent || rightContent) this.#contentful.add(kept);
         if (absorbed === left ? leftContent : rightContent) {
@@ -440,6 +459,13 @@ export class Engine {
     return bound;
   }
 
+  #constant(term: Term): number {
+    const id = this.terms.id(term);
+    this.#constants.add(id);
+    this.#constantRoots.add(id);
+    return id;
+  }
+
   #compile(rule: Rule): CompiledRule {
     const slots = new Map<Variable, number>();
     const slot = (variable: Variable): number => {
@@ -461,7 +487,7 @@ export class Engine {
         kind: "atom",
         relation,
         args: pattern.args.map((arg) =>
-          arg instanceof Variable ? -slot(arg) - 1 : this.terms.id(arg)
+          arg instanceof Variable ? -slot(arg) - 1 : this.#constant(arg)
         ),
       };
     };
