@@ -16,11 +16,15 @@
 //   in the default graph when an axiom, and in the derived graph when only the
 //   union entails it. The retract-partial mode retracts one copy of a triple
 //   asserted in two graphs, which must stay asserted in the other.
+// - extend-custom / retract-custom: the same two oracles with a fixed set of
+//   custom rules registered (a join, an instance-to-instance derivation, a
+//   derived owl:sameAs, and an inconsistency), against a fresh run with the
+//   same rules.
 //
 // Seeded, so every failure is reproducible.
 import type { Quad } from "@rdfjs/types";
 import { dataFactory as df } from "@wazoo/sparql-engine/term";
-import { Reasoner } from "@/mod.ts";
+import { type CustomRule, Reasoner, variables } from "@/mod.ts";
 import { isSkolemTerm } from "@/owl2rl/rules.ts";
 
 const E = "http://d.example/";
@@ -190,6 +194,36 @@ export function generate(seed: number): T3[] {
   return [...out.values()];
 }
 
+const { x, y, z } = variables();
+const customRules = (): CustomRule[] => [
+  {
+    name: "custom-join",
+    body: [[x!, term("p0"), y!], [y!, term("p1"), z!]],
+    head: [[x!, term("p3"), z!]],
+  },
+  {
+    name: "custom-type",
+    body: [[x!, term("a"), term("C0")], [x!, term("p0"), y!]],
+    head: [[y!, term("a"), term("C1")]],
+  },
+  {
+    name: "custom-same",
+    body: [[x!, term("p3"), y!], [y!, term("p3"), x!]],
+    head: [[x!, term("sameAs"), y!]],
+  },
+  {
+    name: "custom-clash",
+    body: [[x!, term("p1"), y!], [x!, term("p2"), y!]],
+    inconsistent: [x!, y!],
+  },
+];
+
+function reasonerFor(mode: Mode): Reasoner {
+  return new Reasoner(
+    mode.endsWith("-custom") ? { rules: customRules() } : {},
+  );
+}
+
 function term(s: string) {
   if (s.startsWith('"')) {
     const m = /^"(.*)"(?:\^\^xsd:(\w+)|@(\w+))?$/.exec(s)!;
@@ -250,8 +284,12 @@ function outcome(r: Reasoner): Outcome {
   };
 }
 
-export function full(base: readonly T3[], delta: readonly T3[]): Outcome {
-  const r = new Reasoner();
+export function full(
+  base: readonly T3[],
+  delta: readonly T3[],
+  mode: Mode = "extend",
+): Outcome {
+  const r = reasonerFor(mode);
   r.add([...base, ...delta].map(quad));
   r.run();
   return outcome(r);
@@ -260,8 +298,9 @@ export function full(base: readonly T3[], delta: readonly T3[]): Outcome {
 export function incremental(
   base: readonly T3[],
   delta: readonly T3[],
+  mode: Mode = "extend",
 ): Outcome {
-  const r = new Reasoner();
+  const r = reasonerFor(mode);
   r.add(base.map(quad));
   r.run();
   r.extend(delta.map(quad));
@@ -277,7 +316,9 @@ export type Mode =
   | "union-retract"
   | "graphs-extend"
   | "graphs-retract"
-  | "graphs-retract-partial";
+  | "graphs-retract-partial"
+  | "extend-custom"
+  | "retract-custom";
 export const MODES: readonly Mode[] = [
   "extend",
   "retract",
@@ -288,6 +329,8 @@ export const MODES: readonly Mode[] = [
   "graphs-extend",
   "graphs-retract",
   "graphs-retract-partial",
+  "extend-custom",
+  "retract-custom",
 ];
 
 /** GQ is a triple asserted in a named graph ("default" is the default one). */
@@ -497,7 +540,7 @@ export function retracted(
   delta: readonly T3[],
   mode: Mode,
 ): Outcome & { removed: Set<string> } {
-  const r = new Reasoner();
+  const r = reasonerFor(mode);
   r.add([...base, ...delta].map(quad));
   r.run();
   const removed = r.retract(
@@ -538,12 +581,12 @@ export function diff(
     const g = graphDiff(base, delta, mode);
     return Object.values(g).every((x) => x.length === 0) ? null : g;
   }
-  if (mode === "extend") {
-    want = full(base, delta);
-    got = incremental(base, delta);
+  if (mode === "extend" || mode === "extend-custom") {
+    want = full(base, delta, mode);
+    got = incremental(base, delta, mode);
   } else {
-    want = full(base, []);
-    const all = full(base, delta);
+    want = full(base, [], mode);
+    const all = full(base, delta, mode);
     const r = retracted(base, delta, mode);
     got = r;
     const truth = minus(all.closure, want.closure);

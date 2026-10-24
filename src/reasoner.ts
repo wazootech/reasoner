@@ -1,5 +1,11 @@
 import type { NamedNode, Quad, Term } from "@rdfjs/types";
 import { dataFactory, termKey } from "@wazoo/sparql-engine/term";
+import {
+  compileCustomRule,
+  type CustomRule,
+  type RuleOptions,
+} from "@/custom-rule.ts";
+import type { Rule } from "@/rule.ts";
 import { Engine, type EngineStatistics } from "@/engine.ts";
 import type { Fact, Relation } from "@/relation.ts";
 import { factKey } from "@/relation.ts";
@@ -144,6 +150,13 @@ type CoreInconsistency = Omit<Inconsistency, "graph">;
  * computed and returns only what they entail that was not entailed before,
  * evaluating only the rules the new facts can reach. {@link Core.retract}
  * removes asserted triples and what only they entailed.
+ *
+ * {@link CustomRule}s, given to the constructor or {@link Reasoner.addRule},
+ * run in the same fixpoint as the OWL 2 RL rules. What they derive is stored
+ * as triples of the closure, so `closure("complete")` lists it and
+ * `closure("application")` lists it under the same filters as any other
+ * triple. `extend` stays incremental. `retract` is not: with a custom rule
+ * registered it recomputes the whole closure.
  */
 class Core {
   #engine!: Engine;
@@ -161,12 +174,43 @@ class Core {
   #parent = new Map<string, string>();
   #owned = new Map<string, Set<string>>();
 
-  constructor() {
+  #custom: CustomRule[] = [];
+  #compiled: Rule[] = [];
+
+  constructor(options: RuleOptions = {}) {
+    for (const rule of options.rules ?? []) this.#register(rule);
     this.#init();
   }
 
+  /**
+   * addRule registers a custom rule. The closure is recomputed from the
+   * asserted triples the next time it is read or extended, so the rule applies
+   * to everything already added. Throws an `Error` for an invalid rule (see
+   * {@link CustomRule}); the reasoner is unchanged then.
+   */
+  addRule(rule: CustomRule): void {
+    this.#register(rule);
+    this.#init();
+    for (const triple of this.#asserted.values()) this.#store(...triple);
+    this.#ran = false;
+  }
+
+  /** rules lists the custom rules registered so far. */
+  get rules(): readonly CustomRule[] {
+    return this.#custom;
+  }
+
+  #register(rule: CustomRule): void {
+    const compiled = compileCustomRule(
+      rule,
+      new Set(this.#custom.map((r) => r.name)),
+    );
+    this.#custom.push(rule);
+    this.#compiled.push(compiled);
+  }
+
   #init(): void {
-    this.#engine = new Engine(OWL2RL_RULES, {
+    this.#engine = new Engine([...OWL2RL_RULES, ...this.#compiled], {
       equalityRelation: TRIPLE,
       sameAs: OWL.sameAs,
       relations: RELATIONS,
@@ -265,6 +309,11 @@ class Core {
    * (a fact links it to another individual or to a complement class, or an
    * asserted triple outside it names one of its terms).
    *
+   * When any {@link CustomRule} is registered, `retract` is not incremental:
+   * it always recomputes the whole closure, because a custom rule may relate
+   * any triples, so no component is known to be closed. The result is still
+   * the same as a fresh run.
+   *
    * The result equals a fresh run for every input the differential test in
    * `test/differential/` generates. Rules that derive schema-level facts from
    * instance triples, other than the complement case handled above, are the
@@ -282,7 +331,9 @@ class Core {
       if (this.#asserted.has(key)) gone.add(key);
     }
     if (gone.size === 0) return [];
-    const scope = this.#component(gone);
+    // A custom rule can derive anything from anything, so the component
+    // analysis below (which assumes the OWL 2 RL rules) does not hold.
+    const scope = this.#custom.length > 0 ? undefined : this.#component(gone);
     const goneTriples = new Map(
       [...gone].map((key) => [key, this.#asserted.get(key)!] as const),
     );
@@ -607,6 +658,8 @@ export type GraphMode = "per-graph" | "union";
 export interface ReasonerOptions {
   /** graphs is the {@link GraphMode}. Defaults to `"per-graph"`. */
   readonly graphs?: GraphMode;
+  /** rules are custom rules to evaluate alongside the OWL 2 RL rules. */
+  readonly rules?: readonly CustomRule[];
 }
 
 const DEFAULT_KEY = termKey(dataFactory.defaultGraph());
@@ -657,7 +710,7 @@ interface PerGraph {
  */
 export class Reasoner {
   readonly #mode: GraphMode;
-  readonly #union = new Core();
+  readonly #union: Core;
   /** #graphs are the graphs with asserted triples, and those triples. */
   readonly #graphs = new Map<
     string,
@@ -669,6 +722,21 @@ export class Reasoner {
 
   constructor(options: ReasonerOptions = {}) {
     this.#mode = options.graphs ?? "per-graph";
+    this.#union = new Core({ rules: options.rules });
+  }
+
+  /**
+   * addRule registers a custom rule. The closure is recomputed from the
+   * asserted quads on the next read. See {@link CustomRule}.
+   */
+  addRule(rule: CustomRule): void {
+    this.#union.addRule(rule);
+    this.#per = undefined;
+  }
+
+  /** rules lists the custom rules registered so far. */
+  get rules(): readonly CustomRule[] {
+    return this.#union.rules;
   }
 
   /** statistics count rounds, derivations, and merges across every run. */
@@ -857,7 +925,7 @@ export class Reasoner {
     if (this.#per !== undefined) return this.#per;
     const per = new Map<string, PerGraph>();
     for (const [key, { triples }] of this.#graphs) {
-      const core = new Core();
+      const core = new Core({ rules: this.#union.rules });
       core.add(triples.values());
       core.run();
       const keys = new Set<string>();

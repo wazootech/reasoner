@@ -17,6 +17,7 @@ export {
   type RetractOptions,
   type Triple,
 } from "@/reasoner.ts";
+export { type CustomRule, type TriplePattern } from "@/custom-rule.ts";
 export { Engine, type EngineOptions, type EngineStatistics } from "@/engine.ts";
 export {
   atom,
