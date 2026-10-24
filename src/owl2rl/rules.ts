@@ -8,9 +8,14 @@
  * - **eq-sym, eq-trans, eq-rep-s/p/o** are the engine's union-find: an
  *   `owl:sameAs` fact merges two terms, and the closure is expanded per class
  *   on output. eq-ref is not materialized, as before.
- * - **dt-eq** is left out: a literal `owl:sameAs` between equal values of
- *   different spellings only ever copied a value onto every subject holding an
- *   equal one (wazootech/wiki#367).
+ * - **dt-eq** is materialized for the numeric and boolean value spaces only:
+ *   literals that are the same value (`"1"^^xsd:int`,
+ *   `"1.0"^^xsd:decimal`, `"true"` and `"1"` as `xsd:boolean`) are put in one
+ *   `owl:sameAs` class, grouped by {@link valueKey} in linear time. This
+ *   copies a value onto each subject holding an equal one (the cost
+ *   wazootech/wiki#367 measured), but only among literals the graph already
+ *   holds. dt-eq is still not applied to any other datatype (strings,
+ *   dateTime, binary, anyURI and so on stay one term per spelling).
  * - **dt-diff** is not materialized between unrelated literals, because it is
  *   quadratic in the graph's distinct literals. Where a different value
  *   matters to another rule (a functional property with two values, two
@@ -28,6 +33,7 @@ import {
   isInstanceOf,
   isInvalidFor,
   literalDatatype,
+  valueKey,
   valuesDiffer,
 } from "@/owl2rl/datatypes.ts";
 import { OWL, RDF, RDFS, XSD } from "@/owl2rl/vocabulary.ts";
@@ -61,7 +67,11 @@ export const RELATIONS = {
   keyContext: 2,
   sameValues: 4,
   literal: 1,
+  literalValue: 2,
 } as const;
+
+/** VALUE_PREFIX starts the internal term naming one numeric or boolean value. */
+const VALUE_PREFIX = "https://wazoo.dev/reasoner/ns#value/";
 
 /** NONE pads an inconsistency row that names fewer than five terms. */
 export const NONE: NamedNode = dataFactory.namedNode(
@@ -779,6 +789,28 @@ const datatypeRules: Rule[] = [
       }
     }),
   ], [atom("literal", v.lt)]),
+  // dt-eq for the numeric and boolean value spaces: index each such literal
+  // by its value, then equate the literals that share one. Grouping by value
+  // keeps this linear in the literals; comparing every pair would not be.
+  rule("dt-eq-value", [
+    atom("literal", v.lt),
+    bind("value-key", [v.lt], [v.m, v.key], function* (inputs, context) {
+      for (const [member, literal] of literalsOf(inputs[0]!, context)) {
+        const key = isPlainString(literal) ? null : valueKey(literal);
+        if (key === null) continue;
+        yield [member, context.id(dataFactory.namedNode(VALUE_PREFIX + key))];
+      }
+    }),
+  ], [atom("literalValue", v.key, v.m)]),
+  rule("dt-eq", [
+    atom("literalValue", v.key, v.a),
+    atom("literalValue", v.key, v.b),
+    filter(
+      "distinct-classes",
+      [v.a, v.b],
+      ([a, b], context) => context.find(a!) !== context.find(b!),
+    ),
+  ], [t(v.a, OWL.sameAs, v.b)]),
   rule("dt-string", [t(v.s, v.p, v.o), stringMember(XSD.string)], [
     t(v.lt, RDF.type, XSD.string),
     t(v.lt, RDF.type, RDFS.Literal),

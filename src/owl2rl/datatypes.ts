@@ -143,8 +143,27 @@ export function isInstanceOf(literal: Literal, datatype: string): boolean {
   if (datatype !== RDFS_LITERAL) {
     const own = datatypeFamily(literalDatatype(literal));
     if (own === undefined || own !== datatypeFamily(datatype)) return false;
+    // The decimal family is one value space: `"1.0"^^xsd:decimal` is the value
+    // 1, which `xsd:integer` contains, though its spelling is not an integer's.
+    if (own === "decimal") return inDecimalSpace(literal, datatype);
   }
   return valueFor(literal, datatype) !== null;
+}
+
+/** inDecimalSpace is `true` when the literal's decimal value is in `datatype`. */
+function inDecimalSpace(literal: Literal, datatype: string): boolean {
+  const value = literalValue(literal);
+  if (
+    value === null || value.family !== "numeric" || value.kind !== "decimal"
+  ) {
+    return false;
+  }
+  if (datatype === XSD_DECIMAL) return true;
+  if (value.scale !== 0) return false;
+  if (datatype === XSD_INTEGER) return true;
+  const [min, max] = INTEGER_BOUNDS.get(datatype)!;
+  return (min === null || value.num >= min) &&
+    (max === null || value.num <= max);
 }
 
 /** isInvalidFor is `true` for a supported `datatype` that `literal` is not in. */
@@ -684,4 +703,42 @@ function dateTimeValue(
     localKey: localKey(year, month, day, hour, minute, second, fraction),
     comparable: true,
   };
+}
+
+/**
+ * valueKey is a string that two literals share exactly when they are the same
+ * value of the numeric or boolean value space, or `null` for any other
+ * literal (other datatypes, ill-typed or NaN literals). It is what dt-eq
+ * groups literals by, in linear time, instead of comparing every pair.
+ *
+ * The spaces follow OWL 2's datatype map, where the value spaces of
+ * `xsd:decimal` (with the whole integer family), `xsd:float` and `xsd:double`
+ * are disjoint:
+ *
+ * - `"1"^^xsd:integer`, `"01"^^xsd:int` and `"1.0"^^xsd:decimal` agree.
+ * - Floats agree with floats and doubles with doubles (`"1.0"^^xsd:double` is
+ *   `"1"^^xsd:double`), never with each other or with a decimal. +0 and -0
+ *   stay distinct values, as they are in {@link valuesDiffer}.
+ * - Booleans key on their value, so `"true"` and `"1"` agree.
+ *
+ * ({@link valuesDiffer} still treats a decimal and a float of the same number
+ * as not different, as Eyeling's `dt:differentValueFrom` did; that is a
+ * comparison and merges nothing.)
+ */
+export function valueKey(literal: Literal): string | null {
+  const value = literalValue(literal);
+  if (value === null || !value.comparable) return null;
+  if (value.family === "boolean") return value.value ? "b:true" : "b:false";
+  if (value.family !== "numeric") return null;
+  if (value.kind === "decimal") {
+    let { num, scale } = value;
+    if (num === 0n) return "decimal:0";
+    while (scale > 0 && num % 10n === 0n) {
+      num /= 10n;
+      scale--;
+    }
+    return `decimal:${num}e-${scale}`;
+  }
+  const space = literalDatatype(literal) === XSD_FLOAT ? "float" : "double";
+  return `${space}:${Object.is(value.value, -0) ? "-0" : String(value.value)}`;
 }

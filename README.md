@@ -62,6 +62,25 @@ complement-class skolems, and types whose class is a blank node.
   `New-Feature-ObjectPropertyChain-BJP-002` passes through a rule outside the RL
   table, `prp-trp-chain`: a transitive property gets a skolem `(p p)` chain
   axiom, which the `"application"` view hides.
+- **Datatype value equality (dt-eq), numeric and boolean only.** Literals that
+  are the same value are put in one `owl:sameAs` class, so functional-property,
+  inverse-functional and `owl:hasKey` merges, `owl:differentFrom` and
+  `owl:AllDifferent` see them as one value. The spaces follow OWL 2's datatype
+  map: `xsd:decimal` and the whole integer family are one space
+  (`"1"^^xsd:integer`, `"01"^^xsd:int` and `"1.0"^^xsd:decimal` agree, and
+  `"1.0"^^xsd:decimal` is a value of `xsd:integer`), `xsd:float` and
+  `xsd:double` are one space each (never equal to each other or to a decimal;
+  `+0` and `-0` stay distinct; `NaN` equals nothing), and `xsd:boolean` values
+  `"true"`/`"1"` and `"false"`/`"0"` agree. Literals are grouped by value, so
+  the cost is linear in the graph's literals. Behavior changes: a subject now
+  also holds every equal spelling a literal of the graph has
+  (`ex:a ex:p "1"^^xsd:integer` with `"1.0"^^xsd:decimal` used anywhere gives
+  `ex:a ex:p "1.0"^^xsd:decimal`, the eq-rep-o copy, in both the `"complete"`
+  and `"application"` views), and `isInstanceOf` for the decimal family tests
+  the value space rather than the spelling. Unchanged deviations: strings,
+  dateTime, binary, anyURI and other datatypes still have one term per spelling,
+  no `owl:differentFrom` is materialized between distinct literals, and `dt-eq`
+  is never applied to unrelated literals.
 - **Parity with `rdfjs-inference-engine`** (`deno task test:parity`): identical
   closures on `bench-1e3`, `docs`, `micro`, and `owl-nosame`. On `owl` this
   package derives two extra triples, a documented divergence (`eq-rep` applied
