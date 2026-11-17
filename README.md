@@ -6,9 +6,15 @@ An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 **Status: 0.4.0.** The OWL 2 RL ruleset, the semi-naive engine, `owl:sameAs` as
 a union-find, incremental additions (`extend`) and retraction (`retract`) work,
 and `deno task test:differential` finds no difference between `extend` or
-`retract` and a fresh run on 5,000 random graphs. The Worlds integration has not
-started. The Wiki switched from `rdfjs-inference-engine` to this package in
-[wazootech/wiki#418](https://github.com/wazootech/wiki/pull/418). The plan is
+`retract` and a fresh run on 5,000 random graphs. Worlds uses it for opt-in
+inference on the Cloudflare backend: derived quads are stored in their own
+column and skipped by search reindexing
+([wazootech/worlds-cloudflare#50](https://github.com/wazootech/worlds-cloudflare/pull/50)
+to [#53](https://github.com/wazootech/worlds-cloudflare/pull/53),
+[#56](https://github.com/wazootech/worlds-cloudflare/pull/56)). The Wiki
+switched from `rdfjs-inference-engine` to this package in
+[wazootech/wiki#418](https://github.com/wazootech/wiki/pull/418) and pins 0.4.0
+([wazootech/wiki#420](https://github.com/wazootech/wiki/pull/420)). The plan is
 [wazootech/reasoner#1](https://github.com/wazootech/reasoner/issues/1); the
 evidence for it is in
 [wazootech/wiki#414](https://github.com/wazootech/wiki/issues/414).
@@ -155,10 +161,10 @@ reasoner.addRule(anotherRule); // also fine after run(); recomputes once
 ## Why
 
 The Wiki CLI and Worlds need OWL 2 RL materialization that scales with the
-graph. The engine the Wiki uses today, `rdfjs-inference-engine` over Eyeling,
-grows quadratically even on graphs that derive nothing: Eyeling evaluates
+graph. The engine the Wiki used before, `rdfjs-inference-engine` over Eyeling,
+grew quadratically even on graphs that derive nothing: Eyeling evaluates
 `owl:sameAs` as a builtin that scans every fact, and the equality rules call it
-once per triple. It also re-reasons over all of its input on every call, while
+once per triple. It also re-reasoned over all of its input on every call, while
 Worlds needs to reason about a change (Δ) against an existing closure.
 
 ## Goals
