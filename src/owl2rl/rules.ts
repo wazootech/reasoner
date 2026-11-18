@@ -424,10 +424,18 @@ const propertyRules: Rule[] = [
   rule("prp-spo1", [t(v.p1, RDFS.subPropertyOf, v.p2), t(v.x, v.p1, v.y)], [
     t(v.x, v.p2, v.y),
   ]),
-  // prp-spo2, for chains of any length.
-  rule("chain-root", [t(v.x, OWL.propertyChainAxiom, v.l)], [
-    atom("chainList", v.l),
-  ]),
+  // prp-spo2, for chains of any length. The skolem chain prp-trp-chain mints
+  // for a transitive property is not walked: its prp-spo2 consequences are
+  // exactly prp-trp's, so walking it only derived the closure a second time
+  // (wazootech/reasoner#41). Its axiom and list triples are still entailed.
+  rule("chain-root", [
+    t(v.x, OWL.propertyChainAxiom, v.l),
+    filter("not-transitive-chain", [v.l], ([l], context) => {
+      const term = context.term(context.find(l!));
+      return !(term.termType === "NamedNode" &&
+        term.value.startsWith(CHAIN_PREFIX));
+    }),
+  ], [atom("chainList", v.l)]),
   rule("chain-tail", [
     atom("chainList", v.l),
     t(v.l, RDF.rest, v.tail),
