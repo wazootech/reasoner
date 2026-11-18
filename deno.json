@@ -10,6 +10,10 @@
     "include": ["src/", "README.md", "LICENSE"],
     "exclude": ["src/**/*.test.ts"]
   },
+  "minimumDependencyAge": {
+    "age": "P1D",
+    "exclude": ["jsr:@wazoo/sparql-engine"]
+  },
   "imports": {
     "@/": "./src/",
     "@rdfjs/types": "npm:@rdfjs/types@^2.0.1",
