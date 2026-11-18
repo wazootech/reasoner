@@ -10,6 +10,7 @@ import ./rl_loop.bend as RLp
 import ./rl_pairs.bend as RP
 import ./rl_rules.bend as RR
 import ./rl_spec.bend as Sp
+import ./rl_semi.bend as RS
 
 # closes: a, b in the graph and c in fire(a, b) put c in the next round.
 def closes(+a: R.Tri, +b: R.Tri, +c: R.Tri, +ts: R.Ts, ha: L.Tr(R.mem(a, ts)), hb: L.Tr(R.mem(b, ts)), hc: L.Tr(R.mem(c, R.fire(a, b, ts)))) -> L.Tr(R.mem(c, R.step(ts))):
@@ -73,24 +74,24 @@ def Laws.stop_means_closed(n, ts, a, b, c, stop, ha, hb, hc):
   RLp.sub_elim(c, R.step(R.iter(n, ts)), R.iter(n, ts), stop, closes(a, b, c, R.iter(n, ts), ha, hb, hc))
 
 # The semi-naive skip law: split each premise into new (delta) or old.
-def semi_b(+c: R.Tri, +old: R.Ts, +delta: R.Ts, +a: R.Tri, +b: R.Tri, sat: L.Tr(R.subset(R.pairs(old, old, R.append(delta, old)), R.append(delta, old))), hf: L.Tr(R.mem(c, R.fire(a, b, R.append(delta, old)))), ao: L.Tr(R.mem(a, old)), r: Or(L.Tr(R.mem(b, delta)), L.Tr(R.mem(b, old)))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
+def semi_b(+c: R.Tri, +old: R.Ts, +delta: R.Ts, +a: R.Tri, +b: R.Tri, sat: L.Tr(R.subset(R.pairs(old, old, old), R.append(delta, old))), hf: L.Tr(R.mem(c, R.fire(a, b, R.append(delta, old)))), ao: L.Tr(R.mem(a, old)), r: Or(L.Tr(R.mem(b, delta)), L.Tr(R.mem(b, old)))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
   match r:
     case Inl{bd}:
-      Inr{RM.mem_append_r(c, R.pairs(delta, R.append(delta, old), R.append(delta, old)), R.pairs(R.append(delta, old), delta, R.append(delta, old)),
-        RP.pairs_has(a, b, c, R.append(delta, old), delta, R.append(delta, old), RM.mem_append_r(a, delta, old, ao), (bd, hf)))}
+      Inr{RM.mem_append_r(c, R.pairs(delta, R.append(delta, old), R.append(delta, old)), R.append(R.pairs(R.append(delta, old), delta, R.append(delta, old)), R.guard(R.has_new_trans(delta), R.pairs(R.append(delta, old), R.append(delta, old), R.append(delta, old)))),
+        RM.mem_append_l(c, R.pairs(R.append(delta, old), delta, R.append(delta, old)), R.guard(R.has_new_trans(delta), R.pairs(R.append(delta, old), R.append(delta, old), R.append(delta, old))),
+          RP.pairs_has(a, b, c, R.append(delta, old), delta, R.append(delta, old), RM.mem_append_r(a, delta, old, ao), (bd, hf))))}
     case Inr{bo}:
-      Inl{RLp.sub_elim(c, R.pairs(old, old, R.append(delta, old)), R.append(delta, old), sat,
-        RP.pairs_has(a, b, c, old, old, R.append(delta, old), ao, (bo, hf)))}
+      RS.semi_old(c, old, delta, a, b, sat, hf, ao, bo)
 
-def semi_a(+c: R.Tri, +old: R.Ts, +delta: R.Ts, +a: R.Tri, +b: R.Tri, sat: L.Tr(R.subset(R.pairs(old, old, R.append(delta, old)), R.append(delta, old))), hf: L.Tr(R.mem(c, R.fire(a, b, R.append(delta, old)))), mb: L.Tr(R.mem(b, R.append(delta, old))), r: Or(L.Tr(R.mem(a, delta)), L.Tr(R.mem(a, old)))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
+def semi_a(+c: R.Tri, +old: R.Ts, +delta: R.Ts, +a: R.Tri, +b: R.Tri, sat: L.Tr(R.subset(R.pairs(old, old, old), R.append(delta, old))), hf: L.Tr(R.mem(c, R.fire(a, b, R.append(delta, old)))), mb: L.Tr(R.mem(b, R.append(delta, old))), r: Or(L.Tr(R.mem(a, delta)), L.Tr(R.mem(a, old)))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
   match r:
     case Inl{ad}:
-      Inr{RM.mem_append_l(c, R.pairs(delta, R.append(delta, old), R.append(delta, old)), R.pairs(R.append(delta, old), delta, R.append(delta, old)),
+      Inr{RM.mem_append_l(c, R.pairs(delta, R.append(delta, old), R.append(delta, old)), R.append(R.pairs(R.append(delta, old), delta, R.append(delta, old)), R.guard(R.has_new_trans(delta), R.pairs(R.append(delta, old), R.append(delta, old), R.append(delta, old)))),
         RP.pairs_has(a, b, c, delta, R.append(delta, old), R.append(delta, old), ad, (mb, hf)))}
     case Inr{ao}:
       semi_b(c, old, delta, a, b, sat, hf, ao, RM.mem_append_elim(b, delta, old, mb))
 
-def semi_conv(+c: R.Tri, +old: R.Ts, +delta: R.Ts, sat: L.Tr(R.subset(R.pairs(old, old, R.append(delta, old)), R.append(delta, old))), w: RP.WA(c, R.append(delta, old), R.append(delta, old), R.append(delta, old))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
+def semi_conv(+c: R.Tri, +old: R.Ts, +delta: R.Ts, sat: L.Tr(R.subset(R.pairs(old, old, old), R.append(delta, old))), w: RP.WA(c, R.append(delta, old), R.append(delta, old), R.append(delta, old))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
   (+a, m) = w
   (ma, wb) = m
   (+b, m2) = wb

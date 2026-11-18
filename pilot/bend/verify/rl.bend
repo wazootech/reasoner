@@ -190,12 +190,23 @@ def pairs(+xs: Ts, +ys: Ts, +ts: Ts) -> Ts:
 def derive(+ts: Ts) -> Ts:
   pairs(ts, ts, ts)
 
-# derive_semi is what a semi-naive round fires: only pairs with a new triple, one
-# from `delta` joined against everything in `all`, on either side. Pairs of old
-# triples are skipped; RL_LAWS.bend proves that loses nothing when their
-# conclusions are already stored.
+# has_new_trans: does delta declare a transitive property, (p type
+# TransitiveProperty)? Such a triple is the third premise of prp-trp, so it
+# seeds a round of its own.
+def has_new_trans(+delta: Ts) -> Bool:
+  match delta:
+    case TNil{}:
+      False{}
+    case TCons{T{+s, +p, +o}, +t}:
+      S.or(S.and(S.neq(0n, p), S.neq(5n, o)), has_new_trans(t))
+
+# derive_semi is what a semi-naive round fires. Only pairs with a new triple are
+# joined: one from `delta` against everything in `all`, on either side. And
+# when `delta` declares a transitive property, every pair is joined, since that
+# declaration is prp-trp's third premise and the data triples may be old. Pairs
+# of old triples are otherwise skipped; RL_LAWS.bend proves that loses nothing.
 def derive_semi(+delta: Ts, +all: Ts) -> Ts:
-  append(pairs(delta, all, all), pairs(all, delta, all))
+  append(pairs(delta, all, all), append(pairs(all, delta, all), guard(has_new_trans(delta), pairs(all, all, all))))
 
 # step is one round: the graph plus every triple the rules derive that it lacks.
 def step(+ts: Ts) -> Ts:
@@ -217,6 +228,31 @@ def iter(+n: Nat, +ts: Ts) -> Ts:
       ts
     case 1n+p:
       step(iter(p, ts))
+
+# fresh_go collects the triples of xs that base lacks, each once: it inserts each
+# triple into base as it goes, so a repeat in xs is already there.
+def fresh_go(+xs: Ts, +base: Ts, +acc: Ts) -> Ts:
+  match xs:
+    case TNil{}:
+      acc
+    case TCons{+h, +t}:
+      fresh_go(t, insert(h, base), insert_if(mem(h, base), h, acc))
+
+# semi_delta is the triples a semi-naive round adds: what derive_semi fires that
+# `all` lacks.
+def semi_delta(+all: Ts, +delta: Ts) -> Ts:
+  fresh_go(derive_semi(delta, all), all, TNil{})
+
+# iter_semi runs n semi-naive rounds from `all` with `delta` new. TESTED, NOT
+# PROVED at the loop level: RL_LAWS.bend proves a round's skip is safe
+# (semi_skip_safe), not that the loop keeps the invariant that law needs.
+def iter_semi(+n: Nat, +all: Ts, +delta: Ts) -> Ts:
+  match n:
+    case 0n:
+      all
+    case 1n+p:
+      +d = semi_delta(all, delta)
+      iter_semi(p, append(d, all), d)
 
 def main() -> Ts:
   # (A sub B), (B sub C), (x type A) gives (A sub C), (x type B) and (x type C).

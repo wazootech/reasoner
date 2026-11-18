@@ -13,27 +13,18 @@
 import { assert, assertEquals } from "@std/assert";
 import { V } from "../encode.ts";
 import { closure } from "../reference.ts";
-import { type Bend, hasBend, load, random } from "./bend_util.ts";
-
-/** toBend turns flat triples into the model's `Ts` list. */
-export function toBend(flat: Uint32Array): unknown {
-  let list: unknown = { $: "TNil" };
-  for (let i = flat.length - 3; i >= 0; i -= 3) {
-    list = {
-      $: "TCons",
-      h: { $: "T", s: flat[i], p: flat[i + 1], o: flat[i + 2] },
-      t: list,
-    };
-  }
-  return list;
-}
-
-/** fromBend turns the model's `Ts` list back into flat triples. */
-export function fromBend(list: Bend): Uint32Array {
-  const out: number[] = [];
-  for (let l = list; l.$ === "TCons"; l = l.t) out.push(l.h.s, l.h.p, l.h.o);
-  return Uint32Array.from(out);
-}
+import { Reasoner } from "@/mod.ts";
+import { generate } from "../../../bench/scaling.ts";
+import { encode } from "../encode.ts";
+import {
+  closeModel,
+  closeSemi,
+  fromBend,
+  hasBend,
+  load,
+  random,
+  toBend,
+} from "./bend_util.ts";
 
 function keys(flat: Uint32Array): Set<string> {
   const out = new Set<string>();
@@ -43,20 +34,15 @@ function keys(flat: Uint32Array): Set<string> {
   return out;
 }
 
-/** model runs rounds until the proved stop test passes, up to `limit`. */
-function model(bend: Bend, input: Uint32Array, limit: number): Uint32Array {
-  const start = toBend(input);
-  for (let rounds = 0; rounds <= limit; rounds++) {
-    const r = bend.iter(rounds, start);
-    if (bend.subset(bend.step(r), r) === true) return fromBend(r);
-  }
-  throw new Error(`no fixpoint within ${limit} rounds`);
-}
-
 const CLASSES = 5, PROPS = 3, THINGS = 5;
-const cls = (r: () => number) => 10 + Math.floor(r() * CLASSES);
+// A class is sometimes TransitiveProperty itself, so (p domain/range/sub TransitiveProperty)
+// can derive `(p type TransitiveProperty)` in a later round, not just assert it.
+const cls = (r: () => number) =>
+  r() < 0.12 ? V.transitive : 10 + Math.floor(r() * CLASSES);
 const prop = (r: () => number) => 20 + Math.floor(r() * PROPS);
-const thing = (r: () => number) => 30 + Math.floor(r() * THINGS);
+// Things are sometimes properties, so a property can be the subject of a type triple.
+const thing = (r: () => number) =>
+  r() < 0.2 ? prop(r) : 30 + Math.floor(r() * THINGS);
 
 /** graph draws schema, type and data triples so every rule can fire. */
 function graph(r: () => number): Uint32Array {
@@ -85,7 +71,7 @@ Deno.test({
     const fired = new Set<string>();
     for (let seed = 1; seed <= 400; seed++) {
       const input = graph(random(seed));
-      const got = keys(model(bend, input, 10));
+      const got = keys(closeModel(bend, input, 10));
       const want = keys(closure(input).triples);
       assertEquals([...got].sort(), [...want].sort(), `seed ${seed}`);
       // no duplicates: the list is exactly the set
@@ -108,5 +94,62 @@ Deno.test({
       "cax/prp-dom/rng and scm-sco never fired",
     );
     assert([...fired].some((p) => Number(p) >= 20), "prp-inv/trp never fired");
+  },
+});
+
+Deno.test({
+  name: "Bend model equals the reference and is a subset of Reasoner on plain",
+  ignore: !hasBend(),
+  fn: async () => {
+    const bend = await load("rl.bend");
+    // The model is quadratic per round, so these sizes take seconds, not 1e4.
+    for (const size of [30, 60]) {
+      const quads = generate(size, "plain");
+      const { triples, dictionary } = encode(quads);
+      const got = keys(closeModel(bend, triples, 10));
+      assertEquals([...got].sort(), [...keys(closure(triples).triples)].sort());
+      const reasoner = new Reasoner();
+      reasoner.add(quads);
+      reasoner.run();
+      const theirs = new Set<string>();
+      for (const q of reasoner.closure("complete")) {
+        theirs.add(
+          [q.subject, q.predicate, q.object].map((t) => dictionary.lookup(t))
+            .join(" "),
+        );
+      }
+      const extra = [...got].filter((t) => !theirs.has(t));
+      assertEquals(extra, [], "the model derives a triple Reasoner does not");
+    }
+  },
+});
+
+Deno.test({
+  name: "Bend semi-naive loop equals the naive loop and the reference",
+  ignore: !hasBend(),
+  fn: async () => {
+    const bend = await load("rl.bend");
+    let late = 0;
+    for (let seed = 1; seed <= 600; seed++) {
+      const input = graph(random(seed));
+      const naive = keys(closeModel(bend, input, 10));
+      assertEquals(
+        [...keys(closeSemi(bend, input, 10))].sort(),
+        [...naive].sort(),
+        `seed ${seed}`,
+      );
+      assertEquals([...naive].sort(), [...keys(closure(input).triples)].sort());
+      // a transitive declaration that was derived, not asserted
+      const asserted = keys(input);
+      const declared = (t: string) => {
+        const [, p, o] = t.split(" ");
+        return p === String(V.type) && o === String(V.transitive);
+      };
+      if ([...naive].some((t) => declared(t) && !asserted.has(t))) late++;
+    }
+    console.log(
+      `semi-naive = naive = reference on 600 graphs (${late} derive a new transitive declaration)`,
+    );
+    assert(late >= 20, `only ${late} graphs derived a transitive declaration`);
   },
 });

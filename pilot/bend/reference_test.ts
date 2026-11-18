@@ -11,6 +11,7 @@ import { Reasoner } from "@/mod.ts";
 import { generate } from "../../bench/scaling.ts";
 import { encode, V } from "./encode.ts";
 import { closure } from "./reference.ts";
+import { closeModel, hasBend, load } from "./verify/bend_util.ts";
 
 type T = readonly [number, number, number];
 
@@ -89,6 +90,24 @@ Deno.test("reference equals brute force on 500 random graphs", () => {
       `seed ${seed}`,
     );
   }
+});
+
+Deno.test({
+  name: "Bend model equals brute force on 40 random graphs",
+  ignore: !hasBend(),
+  fn: async () => {
+    // The Bend model's laws are proved in verify/RL_PROOF.bend; this ties the
+    // proved model to the independent brute force, not just to `closure`.
+    const bend = await load("rl.bend");
+    for (let seed = 1; seed <= 40; seed++) {
+      const input = randomGraph(seed);
+      assertEquals(
+        keys(closeModel(bend, input, 10)),
+        bruteForce(input),
+        `seed ${seed}`,
+      );
+    }
+  },
 });
 
 /** leftOut counts, by predicate (and class for rdf:type), what Reasoner adds. */

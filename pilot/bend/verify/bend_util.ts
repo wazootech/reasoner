@@ -42,3 +42,63 @@ export function random(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** toBend turns flat `[s, p, o, ...]` triples into the model's `Ts` list. */
+export function toBend(flat: Uint32Array): unknown {
+  let list: unknown = { $: "TNil" };
+  for (let i = flat.length - 3; i >= 0; i -= 3) {
+    list = {
+      $: "TCons",
+      h: { $: "T", s: flat[i], p: flat[i + 1], o: flat[i + 2] },
+      t: list,
+    };
+  }
+  return list;
+}
+
+/** fromBend turns the model's `Ts` list back into flat triples. */
+export function fromBend(list: Bend): Uint32Array {
+  const out: number[] = [];
+  for (let l = list; l.$ === "TCons"; l = l.t) out.push(l.h.s, l.h.p, l.h.o);
+  return Uint32Array.from(out);
+}
+
+/**
+ * closeModel runs the model's rounds until its proved stop test passes, up to
+ * `limit` rounds, and returns the result as flat triples. Round n+1 is
+ * `step` of round n, which is how `iter` is defined; the test is the proved
+ * `subset(step(r), r)`, reusing the `step` it computed.
+ */
+export function closeModel(
+  bend: Bend,
+  input: Uint32Array,
+  limit: number,
+): Uint32Array {
+  let r = toBend(input);
+  for (let rounds = 0; rounds <= limit; rounds++) {
+    const next = bend.step(r);
+    if (bend.subset(next, r) === true) return fromBend(r);
+    r = next;
+  }
+  throw new Error(`no fixpoint within ${limit} rounds`);
+}
+
+/**
+ * closeSemi runs the model's semi-naive rounds (`iter_semi`) until a round adds
+ * nothing, and returns the result as flat triples. Unlike closeModel this
+ * loop's stop test is not proved: it is checked against closeModel in tests.
+ */
+export function closeSemi(
+  bend: Bend,
+  input: Uint32Array,
+  limit: number,
+): Uint32Array {
+  let all = toBend(input), delta = all;
+  for (let rounds = 0; rounds <= limit; rounds++) {
+    const d = bend.semi_delta(all, delta);
+    if (d.$ === "TNil") return fromBend(all);
+    all = bend.append(d, all);
+    delta = d;
+  }
+  throw new Error(`no fixpoint within ${limit} rounds`);
+}

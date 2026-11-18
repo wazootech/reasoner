@@ -115,14 +115,15 @@ law stop_means_closed:
 
 # Why a semi-naive round may skip pairs of old triples (the argument behind
 # #40's skips). Let `all` be the new triples `delta` in front of the old ones. If
-# every firing among old triples is already in `all` (the `sat` test), then
-# anything the naive round derives is already in `all` or is derived by a pair
-# with a new triple, which is all `derive_semi` fires.
+# every firing among old triples, checked against the old graph, is already in
+# `all` (the `sat` test), then anything the naive round derives is already in
+# `all` or is derived by `derive_semi`: a pair with a new triple, or any pair
+# when `delta` declares a transitive property (prp-trp's third premise).
 law semi_skip_safe:
   for +old: R.Ts
   for +delta: R.Ts
   for +c: R.Tri
-  for sat: {R.subset(R.pairs(old, old, R.append(delta, old)), R.append(delta, old)) == True{} : Bool}
+  for sat: {R.subset(R.pairs(old, old, old), R.append(delta, old)) == True{} : Bool}
   for p: {R.mem(c, R.derive(R.append(delta, old))) == True{} : Bool}
   Or({R.mem(c, R.append(delta, old)) == True{} : Bool}, {R.mem(c, R.derive_semi(delta, R.append(delta, old))) == True{} : Bool})
 
