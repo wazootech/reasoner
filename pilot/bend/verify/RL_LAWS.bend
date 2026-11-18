@@ -134,3 +134,57 @@ law empty_partner:
   for +c: R.Tri
   for +ts: R.Ts
   {R.mem(c, R.pairs(xs, R.TNil{}, ts)) == False{} : Bool}
+
+# Least closure. The naive loop stays inside any stable superset of its input (a
+# set s that contains the input and that a round adds nothing to). So when its
+# stop test passes, the result is the smallest closed superset of the input.
+law least_closure:
+  for +n: Nat
+  for +ts: R.Ts
+  for +s: R.Ts
+  for hsub: {R.subset(ts, s) == True{} : Bool}
+  for hst: {R.subset(R.step(s), s) == True{} : Bool}
+  {R.subset(R.iter(n, ts), s) == True{} : Bool}
+
+# The semi-naive loop, `iter_semi(n, TNil{}, ts)`: n rounds from the input `ts`
+# as the new triples and nothing old. It keeps every input triple.
+law semi_keeps_input:
+  for +n: Nat
+  for +ts: R.Ts
+  for +c: R.Tri
+  for p: {R.mem(c, ts) == True{} : Bool}
+  {R.mem(c, R.iter_semi(n, R.TNil{}, ts)) == True{} : Bool}
+
+# When its stop test `semi_fixed` passes, the semi-naive result is closed under
+# every rule.
+law semi_stop_closed:
+  for +n: Nat
+  for +ts: R.Ts
+  for +a: R.Tri
+  for +b: R.Tri
+  for +c: R.Tri
+  for fixed: {R.semi_fixed(n, R.TNil{}, ts) == True{} : Bool}
+  for ha: {R.mem(a, R.iter_semi(n, R.TNil{}, ts)) == True{} : Bool}
+  for hb: {R.mem(b, R.iter_semi(n, R.TNil{}, ts)) == True{} : Bool}
+  for hc: {R.mem(c, R.fire(a, b, R.iter_semi(n, R.TNil{}, ts))) == True{} : Bool}
+  {R.mem(c, R.iter_semi(n, R.TNil{}, ts)) == True{} : Bool}
+
+# The semi-naive loop never leaves a stable superset of its input either, so it
+# invents nothing.
+law semi_least:
+  for +n: Nat
+  for +ts: R.Ts
+  for +s: R.Ts
+  for hsub: {R.subset(ts, s) == True{} : Bool}
+  for hst: {R.subset(R.step(s), s) == True{} : Bool}
+  {R.subset(R.iter_semi(n, R.TNil{}, ts), s) == True{} : Bool}
+
+# The two loops agree. If the naive loop's stop test passes after n rounds and the
+# semi-naive loop's after m, they hold exactly the same triples.
+law semi_equals_naive:
+  for +n: Nat
+  for +m: Nat
+  for +ts: R.Ts
+  for stop: {R.subset(R.step(R.iter(n, ts)), R.iter(n, ts)) == True{} : Bool}
+  for fixed: {R.semi_fixed(m, R.TNil{}, ts) == True{} : Bool}
+  (@c: R.Tri -> ({R.mem(c, R.iter(n, ts)) == True{} : Bool} -> {R.mem(c, R.iter_semi(m, R.TNil{}, ts)) == True{} : Bool})) & (@c: R.Tri -> ({R.mem(c, R.iter_semi(m, R.TNil{}, ts)) == True{} : Bool} -> {R.mem(c, R.iter(n, ts)) == True{} : Bool}))

@@ -11,6 +11,11 @@ import ./rl_pairs.bend as RP
 import ./rl_rules.bend as RR
 import ./rl_spec.bend as Sp
 import ./rl_semi.bend as RS
+import ./rl_skip.bend as RK
+import ./rl_least.bend as RLe
+import ./rl_semiloop.bend as RSl
+import ./rl_final.bend as RFi
+import ./rl_sub.bend as Sb
 
 # closes: a, b in the graph and c in fire(a, b) put c in the next round.
 def closes(+a: R.Tri, +b: R.Tri, +c: R.Tri, +ts: R.Ts, ha: L.Tr(R.mem(a, ts)), hb: L.Tr(R.mem(b, ts)), hc: L.Tr(R.mem(c, R.fire(a, b, ts)))) -> L.Tr(R.mem(c, R.step(ts))):
@@ -73,33 +78,8 @@ def Laws.iter_keeps_input(n, ts, c, p):
 def Laws.stop_means_closed(n, ts, a, b, c, stop, ha, hb, hc):
   RLp.sub_elim(c, R.step(R.iter(n, ts)), R.iter(n, ts), stop, closes(a, b, c, R.iter(n, ts), ha, hb, hc))
 
-# The semi-naive skip law: split each premise into new (delta) or old.
-def semi_b(+c: R.Tri, +old: R.Ts, +delta: R.Ts, +a: R.Tri, +b: R.Tri, sat: L.Tr(R.subset(R.pairs(old, old, old), R.append(delta, old))), hf: L.Tr(R.mem(c, R.fire(a, b, R.append(delta, old)))), ao: L.Tr(R.mem(a, old)), r: Or(L.Tr(R.mem(b, delta)), L.Tr(R.mem(b, old)))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
-  match r:
-    case Inl{bd}:
-      Inr{RM.mem_append_r(c, R.pairs(delta, R.append(delta, old), R.append(delta, old)), R.append(R.pairs(R.append(delta, old), delta, R.append(delta, old)), R.guard(R.has_new_trans(delta), R.pairs(R.append(delta, old), R.append(delta, old), R.append(delta, old)))),
-        RM.mem_append_l(c, R.pairs(R.append(delta, old), delta, R.append(delta, old)), R.guard(R.has_new_trans(delta), R.pairs(R.append(delta, old), R.append(delta, old), R.append(delta, old))),
-          RP.pairs_has(a, b, c, R.append(delta, old), delta, R.append(delta, old), RM.mem_append_r(a, delta, old, ao), (bd, hf))))}
-    case Inr{bo}:
-      RS.semi_old(c, old, delta, a, b, sat, hf, ao, bo)
-
-def semi_a(+c: R.Tri, +old: R.Ts, +delta: R.Ts, +a: R.Tri, +b: R.Tri, sat: L.Tr(R.subset(R.pairs(old, old, old), R.append(delta, old))), hf: L.Tr(R.mem(c, R.fire(a, b, R.append(delta, old)))), mb: L.Tr(R.mem(b, R.append(delta, old))), r: Or(L.Tr(R.mem(a, delta)), L.Tr(R.mem(a, old)))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
-  match r:
-    case Inl{ad}:
-      Inr{RM.mem_append_l(c, R.pairs(delta, R.append(delta, old), R.append(delta, old)), R.append(R.pairs(R.append(delta, old), delta, R.append(delta, old)), R.guard(R.has_new_trans(delta), R.pairs(R.append(delta, old), R.append(delta, old), R.append(delta, old)))),
-        RP.pairs_has(a, b, c, delta, R.append(delta, old), R.append(delta, old), ad, (mb, hf)))}
-    case Inr{ao}:
-      semi_b(c, old, delta, a, b, sat, hf, ao, RM.mem_append_elim(b, delta, old, mb))
-
-def semi_conv(+c: R.Tri, +old: R.Ts, +delta: R.Ts, sat: L.Tr(R.subset(R.pairs(old, old, old), R.append(delta, old))), w: RP.WA(c, R.append(delta, old), R.append(delta, old), R.append(delta, old))) -> Or(L.Tr(R.mem(c, R.append(delta, old))), L.Tr(R.mem(c, R.derive_semi(delta, R.append(delta, old))))):
-  (+a, m) = w
-  (ma, wb) = m
-  (+b, m2) = wb
-  (mb, hf) = m2
-  semi_a(c, old, delta, a, b, sat, hf, mb, RM.mem_append_elim(a, delta, old, ma))
-
 def Laws.semi_skip_safe(old, delta, c, sat, p):
-  semi_conv(c, old, delta, sat, RP.pairs_elim(c, R.append(delta, old), R.append(delta, old), R.append(delta, old), p))
+  RK.semi_skip(old, delta, c, sat, p)
 
 def Laws.empty_partner(xs, c, ts):
   match xs:
@@ -107,3 +87,20 @@ def Laws.empty_partner(xs, c, ts):
       {==}
     case R.TCons{h, t}:
       Laws.empty_partner(t, c, ts)
+
+def Laws.least_closure(n, ts, s, hsub, hst):
+  RLe.iter_least(n, ts, s, hsub, RS.dup(Bool, R.subset(R.step(s), s), True{}, hst))
+
+def Laws.semi_keeps_input(n, ts, c, p):
+  RSl.iter_semi_keeps(n, R.TNil{}, ts, c, RM.mem_append_l(c, ts, R.TNil{}, p))
+
+def Laws.semi_stop_closed(n, ts, a, b, c, fixed, ha, hb, hc):
+  RSl.iter_semi_closed(n, R.TNil{}, ts, a, b, c, {==}, fixed, ha, hb, hc)
+
+def Laws.semi_least(n, ts, s, hsub, hst):
+  RSl.iter_semi_least(n, R.TNil{}, ts, s,
+    L.and_intro(R.subset(R.append(ts, R.TNil{}), s), R.subset(R.step(s), s), Sb.subset_append(ts, R.TNil{}, s, hsub, {==}), hst))
+
+def Laws.semi_equals_naive(n, m, ts, stop, fixed):
+  (c => p => RLp.sub_elim(c, R.iter(n, ts), R.iter_semi(m, R.TNil{}, ts), RFi.naive_in_semi(n, m, ts, fixed), p),
+   c => p => RLp.sub_elim(c, R.iter_semi(m, R.TNil{}, ts), R.iter(n, ts), RFi.semi_in_naive(n, m, ts, stop), p))

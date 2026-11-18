@@ -18,6 +18,23 @@ type Ts is Data:
   TNil{}
   TCons{h: Tri, t: Ts}
 
+# SemiCx is the pair (old, delta) a semi-naive round starts from; `all` is
+# `append(delta, old)`. Proofs pass it to closed lemmas as ordinary data.
+type SemiCx is Data:
+  SemiCx{old: Ts, delta: Ts}
+
+# LeastCx is the pair (r, s) of a round's graph and a stable superset; LoopCx
+# adds the semi-naive state. Like SemiCx they only carry data to closed lemmas.
+type LeastCx is Data:
+  LeastCx{r: Ts, s: Ts}
+
+type LoopCx is Data:
+  LoopCx{old: Ts, delta: Ts, s: Ts}
+
+# KeepCx is (n, ts): a round count and the input, for lemmas about a loop's result.
+type KeepCx is Data:
+  KeepCx{n: Nat, ts: Ts}
+
 def tri_eq(+x: Tri, +y: Tri) -> Bool:
   match x y:
     case T{+a, +b, +c} T{+d, +e, +f}:
@@ -243,16 +260,35 @@ def fresh_go(+xs: Ts, +base: Ts, +acc: Ts) -> Ts:
 def semi_delta(+all: Ts, +delta: Ts) -> Ts:
   fresh_go(derive_semi(delta, all), all, TNil{})
 
-# iter_semi runs n semi-naive rounds from `all` with `delta` new. TESTED, NOT
-# PROVED at the loop level: RL_LAWS.bend proves a round's skip is safe
-# (semi_skip_safe), not that the loop keeps the invariant that law needs.
-def iter_semi(+n: Nat, +all: Ts, +delta: Ts) -> Ts:
+def is_nil(+xs: Ts) -> Bool:
+  match xs:
+    case TNil{}:
+      True{}
+    case TCons{+h, +t}:
+      False{}
+
+# iter_semi runs n semi-naive rounds. The state is (old, delta), the graph being
+# `append(delta, old)`; a round fires `derive_semi`, keeps what is new, and
+# makes the old graph the next `old`. Start it with `old = TNil{}` and
+# `delta` the input. RL_LAWS.bend proves it keeps the input, is closed when
+# `semi_fixed` holds, and equals the naive loop.
+def iter_semi(+n: Nat, +old: Ts, +delta: Ts) -> Ts:
   match n:
     case 0n:
-      all
+      append(delta, old)
     case 1n+p:
-      +d = semi_delta(all, delta)
-      iter_semi(p, append(d, all), d)
+      +d = semi_delta(append(delta, old), delta)
+      iter_semi(p, append(delta, old), d)
+
+# semi_fixed: after n rounds, a further round adds nothing. It is the semi-naive
+# loop's stop test, the counterpart of `subset(step(r), r)`.
+def semi_fixed(+n: Nat, +old: Ts, +delta: Ts) -> Bool:
+  match n:
+    case 0n:
+      is_nil(semi_delta(append(delta, old), delta))
+    case 1n+p:
+      +d = semi_delta(append(delta, old), delta)
+      semi_fixed(p, append(delta, old), d)
 
 def main() -> Ts:
   # (A sub B), (B sub C), (x type A) gives (A sub C), (x type B) and (x type C).

@@ -84,20 +84,22 @@ export function closeModel(
 }
 
 /**
- * closeSemi runs the model's semi-naive rounds (`iter_semi`) until a round adds
- * nothing, and returns the result as flat triples. Unlike closeModel this
- * loop's stop test is not proved: it is checked against closeModel in tests.
+ * closeSemi runs the model's semi-naive rounds (`iter_semi`, state
+ * `(old, delta)`) until `semi_delta` is empty, and returns the graph as flat
+ * triples. Its stop test is `semi_fixed`, which RL_LAWS.bend proves means closed.
  */
 export function closeSemi(
   bend: Bend,
   input: Uint32Array,
   limit: number,
 ): Uint32Array {
-  let all = toBend(input), delta = all;
+  let old: unknown = { $: "TNil" };
+  let delta = toBend(input);
   for (let rounds = 0; rounds <= limit; rounds++) {
+    const all = bend.append(delta, old);
     const d = bend.semi_delta(all, delta);
     if (d.$ === "TNil") return fromBend(all);
-    all = bend.append(d, all);
+    old = all;
     delta = d;
   }
   throw new Error(`no fixpoint within ${limit} rounds`);
