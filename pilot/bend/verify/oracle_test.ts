@@ -1,0 +1,152 @@
+/**
+ * Differential test (reasoner#45): the Bend model of scm-sco, whose laws are
+ * proved in PROOF.bend, against the pilot's TypeScript reference closure on
+ * random subClassOf graphs.
+ *
+ * The proofs say the model's `step` is exactly "the graph plus every
+ * composition" and that a passing stop test means the result is closed. This
+ * test connects that to the code in `reference.ts`: both must produce the same
+ * subClassOf edges. It compiles `sco.bend` with `bend -o`, so it needs `bend`
+ * on the PATH and is skipped without it.
+ *
+ *     deno test --allow-read --allow-write --allow-run --allow-env \
+ *       pilot/bend/verify/oracle_test.ts
+ */
+import { assert, assertEquals } from "@std/assert";
+import { V } from "../encode.ts";
+import { closure } from "../reference.ts";
+
+/** Edge is `[subclass, superclass]`; ids start at 10, clear of the vocabulary. */
+type Edge = readonly [number, number];
+
+// deno-lint-ignore no-explicit-any -- the generated module is untyped
+type Bend = any;
+
+function hasBend(): boolean {
+  try {
+    return new Deno.Command("bend", {
+      args: ["--help"],
+      stdout: "null",
+      stderr: "null",
+    })
+      .outputSync().success;
+  } catch {
+    return false;
+  }
+}
+
+async function load(): Promise<Bend> {
+  const dir = await Deno.makeTempDir();
+  const out = `${dir}/sco.mjs`;
+  const src = new URL("./sco.bend", import.meta.url).pathname;
+  const run = await new Deno.Command("bend", {
+    args: [src, "-o", out],
+    env: { BEND_NO_TELEMETRY: "1" },
+  })
+    .output();
+  assert(run.success, new TextDecoder().decode(run.stderr));
+  return (await import(`file://${out}`)).default;
+}
+
+function toList(edges: readonly Edge[]): unknown {
+  return edges.reduceRight<unknown>(
+    (t, [a, b]) => ({ $: "ECons", h: { $: "E", a, b }, t }),
+    { $: "ENil" },
+  );
+}
+
+function fromList(list: Bend): Set<string> {
+  const out = new Set<string>();
+  for (let l = list; l.$ === "ECons"; l = l.t) out.add(`${l.h.a} ${l.h.b}`);
+  return out;
+}
+
+/** random returns a deterministic generator (mulberry32). */
+function random(seed: number): () => number {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** reference closes the edges with the TypeScript reference. */
+function reference(edges: readonly Edge[]): Set<string> {
+  const flat = new Uint32Array(edges.length * 3);
+  edges.forEach(([a, b], i) => flat.set([a, V.subClassOf, b], i * 3));
+  const out = new Set<string>();
+  const { triples } = closure(flat);
+  for (let i = 0; i < triples.length; i += 3) {
+    if (triples[i + 1] === V.subClassOf) {
+      out.add(`${triples[i]} ${triples[i + 2]}`);
+    }
+  }
+  return out;
+}
+
+/** MAX_LIST caps the model's list: it keeps duplicates, so cycles grow it fast. */
+const MAX_LIST = 40;
+
+function length(list: Bend): number {
+  let n = 0;
+  for (let l = list; l.$ === "ECons"; l = l.t) n++;
+  return n;
+}
+
+/**
+ * model runs rounds until the proved stop test passes, up to `limit`. It
+ * returns null when the list outgrows MAX_LIST first: the model has no dedupe
+ * yet, so those graphs are skipped, not compared.
+ */
+function model(
+  bend: Bend,
+  edges: readonly Edge[],
+  limit: number,
+): Set<string> | null {
+  const start = toList(edges);
+  for (let rounds = 0; rounds <= limit; rounds++) {
+    const r = bend.iter(rounds, start);
+    if (length(r) > MAX_LIST) return null;
+    if (bend.subset(bend.step(r), r) === true) return fromList(r);
+  }
+  throw new Error(`no fixpoint within ${limit} rounds`);
+}
+
+Deno.test({
+  name: "Bend scm-sco model matches the TypeScript reference on random graphs",
+  ignore: !hasBend(),
+  fn: async () => {
+    const bend = await load();
+    let compared = 0, grew = 0;
+    for (let seed = 1; seed <= 400; seed++) {
+      const rnd = random(seed);
+      const nodes = 2 + Math.floor(rnd() * 4);
+      const edges: Edge[] = Array.from(
+        { length: Math.floor(rnd() * 7) },
+        () =>
+          [
+            10 + Math.floor(rnd() * nodes),
+            10 + Math.floor(rnd() * nodes),
+          ] as const,
+      );
+      const got = model(bend, edges, 6);
+      if (got === null) continue;
+      compared++;
+      if (got.size > new Set(edges.map(([a, b]) => `${a} ${b}`)).size) grew++;
+      assertEquals(
+        [...got].sort(),
+        [...reference(edges)].sort(),
+        `seed ${seed}: ${JSON.stringify(edges)}`,
+      );
+    }
+    console.log(
+      `compared ${compared} of 400 graphs (${grew} where closing added edges)`,
+    );
+    assert(compared >= 200, `only ${compared} graphs compared`);
+    assert(
+      grew >= 100,
+      `closing added edges in only ${grew} graphs: the test is too easy`,
+    );
+  },
+});

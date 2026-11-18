@@ -82,7 +82,24 @@ def compose(+xs: Es, +ys: Es) -> Es:
 def step(+es: Es) -> Es:
   append(es, compose(es, es))
 
+# subset is the loop's stop test: every edge of xs is in ys.
+def subset(+xs: Es, +ys: Es) -> Bool:
+  match xs:
+    case ENil{}:
+      True{}
+    case ECons{+h, +t}:
+      and(mem(h, ys), subset(t, ys))
+
+# iter runs n rounds of step. Whether n rounds are enough is not proved here:
+# the caller checks `subset(step(r), r)` on the result instead.
+def iter(+n: Nat, +es: Es) -> Es:
+  match n:
+    case 0n:
+      es
+    case 1n+p:
+      step(iter(p, es))
+
 def main() -> Es:
   # 0 -> 1 -> 2 -> 3 gives 0 -> 2, 1 -> 3 and 0 -> 3 over two rounds.
   g : Es = ECons{E{0n, 1n}, ECons{E{1n, 2n}, ECons{E{2n, 3n}, ENil{}}}}
-  step(step(g))
+  iter(2n, g)
