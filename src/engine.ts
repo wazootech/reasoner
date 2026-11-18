@@ -48,6 +48,8 @@ interface Seed {
    * that hold that constant there.
    */
   readonly keyColumn: number;
+  /** guards are the other body atoms, each of which a firing must match. */
+  readonly guards: readonly CompiledAtom[];
 }
 
 /** EngineOptions configure the relation that carries `owl:sameAs`. */
@@ -224,6 +226,7 @@ export class Engine {
       for (const rule of this.#rules) {
         const binding = new Array<number>(rule.slots).fill(UNBOUND);
         for (const seed of rule.seeds) {
+          if (!this.#mayFire(seed)) continue;
           const facts = this.#seedFacts(delta, grouped, seed);
           if (facts === undefined) continue;
           for (const fact of facts) {
@@ -237,6 +240,28 @@ export class Engine {
       }
       this.#settle();
     }
+  }
+
+  /**
+   * mayFire is `false` when another body atom of `seed` matches no live fact
+   * at the start of the round: its relation is empty, or one of its constant
+   * columns holds no live fact. Skipping is sound under semi-naive evaluation.
+   * A firing's newest fact is in some round's delta, and every older premise
+   * is stored by then, so the seed for that newest fact's atom sees every
+   * guard non-empty and is not skipped. Only the per-column indexes every
+   * relation already keeps are read, so no index is created.
+   */
+  #mayFire(seed: Seed): boolean {
+    for (const atom of seed.guards) {
+      if (atom.relation.size === 0) return false;
+      for (let column = 0; column < atom.args.length; column++) {
+        const arg = atom.args[column]!;
+        if (arg < 0) continue;
+        const facts = atom.relation.column(column, this.equality.find(arg));
+        if (!facts.some((fact) => fact.diedAt === Infinity)) return false;
+      }
+    }
+    return true;
   }
 
   /** seedFacts returns the delta facts `seed` can match, grouping on demand. */
@@ -515,6 +540,7 @@ export class Engine {
         atom: seed,
         plan: plan(rule.name, seed, body.filter((step) => step !== seed)),
         keyColumn: constants.includes(1) ? 1 : constants[0] ?? -1,
+        guards: atoms.filter((atom) => atom !== seed),
       };
     });
     const bodyVariables = new Set<number>();
