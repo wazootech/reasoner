@@ -35,5 +35,11 @@ def join_if_keep(+x: S.Edge, +a: Nat, +d: Nat, +rest: S.Es, +hit: Bool, p: L.Tr(
     case False{}:
       p
 
+# mem_edge_eq: an edge equal to a member of ys is a member of ys.
+def mem_edge_eq(+e: S.Edge, +h: S.Edge, +ys: S.Es, q: L.Tr(S.edge_eq(e, h)), hm: L.Tr(S.mem(h, ys))) -> L.Tr(S.mem(e, ys)):
+  eq = L.edge_eq_sound(e, h, q)
+  %Equal.sym(S.Edge, e, h, eq) : L.Tr(S.mem(_, ys))
+  hm
+
 def main() -> U32:
   1

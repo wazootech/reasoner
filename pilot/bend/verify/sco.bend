@@ -78,9 +78,29 @@ def compose(+xs: Es, +ys: Es) -> Es:
     case ECons{+h, +t}:
       append(compose1(h, ys), compose(t, ys))
 
-# step is one naive round of scm-sco: the graph plus every composed edge.
+# insert_if adds e in front of es unless `hit` says it is already there. It is
+# its own def because Bend cannot match on a computed value.
+def insert_if(+hit: Bool, +e: Edge, +es: Es) -> Es:
+  match hit:
+    case True{}:
+      es
+    case False{}:
+      ECons{e, es}
+
+def insert(+e: Edge, +es: Es) -> Es:
+  insert_if(mem(e, es), e, es)
+
+# union inserts every edge of xs into base, so base never gains a duplicate.
+def union(+xs: Es, +base: Es) -> Es:
+  match xs:
+    case ENil{}:
+      base
+    case ECons{+h, +t}:
+      union(t, insert(h, base))
+
+# step is one round of scm-sco: the graph plus every composed edge it lacks.
 def step(+es: Es) -> Es:
-  append(es, compose(es, es))
+  union(compose(es, es), es)
 
 # subset is the loop's stop test: every edge of xs is in ys.
 def subset(+xs: Es, +ys: Es) -> Bool:

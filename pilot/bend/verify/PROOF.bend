@@ -7,22 +7,23 @@ import ./mem.bend as M
 import ./compose.bend as C
 import ./elim.bend as X
 import ./loop.bend as Lp
+import ./dedupe.bend as D
 
 def Laws.step_mono(e, es, p):
-  M.mem_append_l(e, es, S.compose(es, es), p)
+  D.union_keeps(e, S.compose(es, es), es, p)
 
 def Laws.step_closes(a, b, c, es, p, q):
-  M.mem_append_r(S.E{a, c}, es, S.compose(es, es), C.compose_has(a, b, c, es, es, p, q))
+  D.union_has(S.E{a, c}, S.compose(es, es), es, C.compose_has(a, b, c, es, es, p, q))
 
-def sound_cases(+a: Nat, +c: Nat, +es: S.Es, r: Or(L.Tr(S.mem(S.E{a, c}, es)), L.Tr(S.mem(S.E{a, c}, S.compose(es, es))))) -> Or(L.Tr(S.mem(S.E{a, c}, es)), X.Wit(a, c, es, es)):
+def sound_cases(+a: Nat, +c: Nat, +es: S.Es, r: Or(L.Tr(S.mem(S.E{a, c}, S.compose(es, es))), L.Tr(S.mem(S.E{a, c}, es)))) -> Or(L.Tr(S.mem(S.E{a, c}, es)), X.Wit(a, c, es, es)):
   match r:
-    case Inl{x}:
-      Inl{x}
-    case Inr{y}:
+    case Inl{y}:
       Inr{X.compose_elim(a, c, es, es, y)}
+    case Inr{x}:
+      Inl{x}
 
 def Laws.step_sound(a, c, es, p):
-  sound_cases(a, c, es, X.mem_append_elim(S.E{a, c}, es, S.compose(es, es), p))
+  sound_cases(a, c, es, D.union_elim(S.E{a, c}, S.compose(es, es), es, p))
 
 def Laws.stable_is_closed(a, b, c, es, stable, p, q):
   stable(S.E{a, c}, Laws.step_closes(a, b, c, es, p, q))

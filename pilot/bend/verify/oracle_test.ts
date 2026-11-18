@@ -85,30 +85,26 @@ function reference(edges: readonly Edge[]): Set<string> {
   return out;
 }
 
-/** MAX_LIST caps the model's list: it keeps duplicates, so cycles grow it fast. */
-const MAX_LIST = 40;
-
 function length(list: Bend): number {
   let n = 0;
   for (let l = list; l.$ === "ECons"; l = l.t) n++;
   return n;
 }
 
-/**
- * model runs rounds until the proved stop test passes, up to `limit`. It
- * returns null when the list outgrows MAX_LIST first: the model has no dedupe
- * yet, so those graphs are skipped, not compared.
- */
-function model(
-  bend: Bend,
-  edges: readonly Edge[],
-  limit: number,
-): Set<string> | null {
+/** Result is the model's closure and how long its list is. */
+interface Result {
+  readonly edges: Set<string>;
+  readonly listLength: number;
+}
+
+/** model runs rounds until the proved stop test passes, up to `limit`. */
+function model(bend: Bend, edges: readonly Edge[], limit: number): Result {
   const start = toList(edges);
   for (let rounds = 0; rounds <= limit; rounds++) {
     const r = bend.iter(rounds, start);
-    if (length(r) > MAX_LIST) return null;
-    if (bend.subset(bend.step(r), r) === true) return fromList(r);
+    if (bend.subset(bend.step(r), r) === true) {
+      return { edges: fromList(r), listLength: length(r) };
+    }
   }
   throw new Error(`no fixpoint within ${limit} rounds`);
 }
@@ -118,35 +114,38 @@ Deno.test({
   ignore: !hasBend(),
   fn: async () => {
     const bend = await load();
-    let compared = 0, grew = 0;
-    for (let seed = 1; seed <= 400; seed++) {
+    let grew = 0, cyclic = 0;
+    for (let seed = 1; seed <= 500; seed++) {
       const rnd = random(seed);
-      const nodes = 2 + Math.floor(rnd() * 4);
+      const nodes = 2 + Math.floor(rnd() * 7);
       const edges: Edge[] = Array.from(
-        { length: Math.floor(rnd() * 7) },
+        { length: Math.floor(rnd() * 13) },
         () =>
           [
             10 + Math.floor(rnd() * nodes),
             10 + Math.floor(rnd() * nodes),
           ] as const,
       );
-      const got = model(bend, edges, 6);
-      if (got === null) continue;
-      compared++;
-      if (got.size > new Set(edges.map(([a, b]) => `${a} ${b}`)).size) grew++;
+      const input = new Set(edges.map(([a, b]) => `${a} ${b}`));
+      const got = model(bend, edges, 8);
       assertEquals(
-        [...got].sort(),
+        [...got.edges].sort(),
         [...reference(edges)].sort(),
         `seed ${seed}: ${JSON.stringify(edges)}`,
       );
+      // dedupe: rounds add each new edge once, never a copy
+      assertEquals(
+        got.listLength,
+        edges.length + got.edges.size - input.size,
+        `seed ${seed}: the model's list holds duplicates`,
+      );
+      if (got.edges.size > input.size) grew++;
+      if ([...got.edges].some((e) => e.split(" ")[0] === e.split(" ")[1])) {
+        cyclic++;
+      }
     }
-    console.log(
-      `compared ${compared} of 400 graphs (${grew} where closing added edges)`,
-    );
-    assert(compared >= 200, `only ${compared} graphs compared`);
-    assert(
-      grew >= 100,
-      `closing added edges in only ${grew} graphs: the test is too easy`,
-    );
+    console.log(`compared 500 graphs (${grew} grew, ${cyclic} with a cycle)`);
+    assert(grew >= 200, `closing added edges in only ${grew} graphs: too easy`);
+    assert(cyclic >= 50, `only ${cyclic} graphs had a cycle`);
   },
 });

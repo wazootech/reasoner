@@ -3,17 +3,18 @@
 Laws about `rdfs:subClassOf` transitivity (rule `scm-sco`), proved in Bend 2 and
 checked twice: by `bend` and by its Lean-proved kernel (`--verdict`).
 
-| File             | What it is                                                              |
-| ---------------- | ----------------------------------------------------------------------- |
-| `sco.bend`       | The code: edges, membership, `step` (one naive round), `iter`, `subset` |
-| `LAWS.bend`      | The claims, written by a human; each is an open `law`                   |
-| `PROOF.bend`     | One def per law; `bend PROOF.bend --verdict` is the gate                |
-| `logic.bend`     | Lemmas about `Bool`, `Nat` equality and edge equality                   |
-| `mem.bend`       | Lemmas about membership and `append`                                    |
-| `compose.bend`   | Lemmas that `compose` finds `a -> c` from `a -> b` and `b -> c`         |
-| `elim.bend`      | Lemmas that take `compose` membership apart (the soundness half)        |
-| `loop.bend`      | Lemmas about the stop test `subset` and about `iter`                    |
-| `oracle_test.ts` | Differential test of the compiled model against `reference.ts`          |
+| File             | What it is                                                                      |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `sco.bend`       | The code: edges, membership, `step` (one deduped round), `iter`, `subset`       |
+| `LAWS.bend`      | The claims, written by a human; each is an open `law`                           |
+| `PROOF.bend`     | One def per law; `bend PROOF.bend --verdict` is the gate                        |
+| `logic.bend`     | Lemmas about `Bool`, `Nat` equality and edge equality                           |
+| `mem.bend`       | Lemmas about membership and `append`                                            |
+| `compose.bend`   | Lemmas that `compose` finds `a -> c` from `a -> b` and `b -> c`                 |
+| `dedupe.bend`    | Lemmas about `insert` and `union`, which keep `step`'s lists free of duplicates |
+| `elim.bend`      | Lemmas that take `compose` membership apart (the soundness half)                |
+| `loop.bend`      | Lemmas about the stop test `subset` and about `iter`                            |
+| `oracle_test.ts` | Differential test of the compiled model against `reference.ts`                  |
 
 ## What is proved
 
@@ -29,8 +30,9 @@ Six laws, all for every input:
 | `stop_means_closed` | If `subset(step(r), r)` passes on `r = iter(n, es)`, `r` is closed.  |
 
 The first three pin `step` down completely: its edges are exactly the input plus
-the compositions. The last two say the loop's answer is right whenever its stop
-test passes.
+the compositions. `step` inserts each composed edge only if it is missing, so
+the lists hold no duplicates (`dedupe.bend`). The last two say the loop's answer
+is right whenever its stop test passes.
 
 ## What is not proved
 
@@ -43,8 +45,8 @@ test passes.
   only Bool equalities can be duplicated. It is doable but a separate piece of
   work.
 - **The other five rules** in `reference.ts`, and semi-naive equals naive.
-- **The model keeps duplicates.** A cyclic graph makes its lists grow quickly,
-  and `mem` then overflows the JS stack. A dedupe step needs its own proof.
+- **Speed.** The model composes every pair, so a round costs `O(|edges|^2)`. It
+  is an oracle for small graphs, not a fast closure.
 
 ## Run
 
@@ -63,7 +65,8 @@ CI: `pilot/` is outside `deno task test`.
 
 A pass means every law holds for every input, not for sampled ones. It is only
 as meaningful as the claims, so read `LAWS.bend`. The proofs are written against
-the exact shape of `sco.bend`, so any change to the code breaks them: three
-mutants (a wrong join test, dropping the input from `step`, a loose `neq`) were
-each rejected. That shows the proofs track the code, not that each law is strong
-by itself; the strength is the six laws together.
+the exact shape of `sco.bend`, so any change to the code breaks them: six
+mutants (a wrong join test, dropping the input from `step`, a loose `neq`, a
+bogus extra edge, a swapped join, and swapped `insert_if` branches) were each
+rejected. That shows the proofs track the code, not that each law is strong by
+itself; the strength is the six laws together.
