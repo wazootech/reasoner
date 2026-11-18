@@ -14,39 +14,11 @@
  */
 import { assert, assertEquals } from "@std/assert";
 import { V } from "../encode.ts";
+import { type Bend, hasBend, load, random } from "./bend_util.ts";
 import { closure } from "../reference.ts";
 
 /** Edge is `[subclass, superclass]`; ids start at 10, clear of the vocabulary. */
 type Edge = readonly [number, number];
-
-// deno-lint-ignore no-explicit-any -- the generated module is untyped
-type Bend = any;
-
-function hasBend(): boolean {
-  try {
-    return new Deno.Command("bend", {
-      args: ["--help"],
-      stdout: "null",
-      stderr: "null",
-    })
-      .outputSync().success;
-  } catch {
-    return false;
-  }
-}
-
-async function load(): Promise<Bend> {
-  const dir = await Deno.makeTempDir();
-  const out = `${dir}/sco.mjs`;
-  const src = new URL("./sco.bend", import.meta.url).pathname;
-  const run = await new Deno.Command("bend", {
-    args: [src, "-o", out],
-    env: { BEND_NO_TELEMETRY: "1" },
-  })
-    .output();
-  assert(run.success, new TextDecoder().decode(run.stderr));
-  return (await import(`file://${out}`)).default;
-}
 
 function toList(edges: readonly Edge[]): unknown {
   return edges.reduceRight<unknown>(
@@ -59,16 +31,6 @@ function fromList(list: Bend): Set<string> {
   const out = new Set<string>();
   for (let l = list; l.$ === "ECons"; l = l.t) out.add(`${l.h.a} ${l.h.b}`);
   return out;
-}
-
-/** random returns a deterministic generator (mulberry32). */
-function random(seed: number): () => number {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** reference closes the edges with the TypeScript reference. */
@@ -113,7 +75,7 @@ Deno.test({
   name: "Bend scm-sco model matches the TypeScript reference on random graphs",
   ignore: !hasBend(),
   fn: async () => {
-    const bend = await load();
+    const bend = await load("sco.bend");
     let grew = 0, cyclic = 0;
     for (let seed = 1; seed <= 500; seed++) {
       const rnd = random(seed);
