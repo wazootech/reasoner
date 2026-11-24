@@ -6,7 +6,7 @@
     "jsr:@std/fmt@^1.0.10": "1.0.10",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
-    "jsr:@wazoo/sparql-engine@0.4.4": "0.4.4",
+    "jsr:@wazoo/sparql-engine@~0.5.1": "0.5.1",
     "npm:@rdfjs/types@^2.0.1": "2.0.1",
     "npm:rdfjs-inference-engine@0.2.2": "0.2.2",
     "npm:rdfxml-streaming-parser@3.1.0": "3.1.0"
@@ -31,8 +31,8 @@
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     },
-    "@wazoo/sparql-engine@0.4.4": {
-      "integrity": "a3c88d00fddf13ca078321463e554d52c8d8e8d083adfcd2df08e7b9bd289c53",
+    "@wazoo/sparql-engine@0.5.1": {
+      "integrity": "f4c3b63d3b45512ad1b40553fa240accd90f8ea106073207a1cee856768f5825",
       "dependencies": [
         "npm:@rdfjs/types"
       ]
@@ -224,7 +224,7 @@
     "dependencies": [
       "jsr:@std/assert@^1.0.19",
       "jsr:@std/cli@^1.0.32",
-      "jsr:@wazoo/sparql-engine@0.4.4",
+      "jsr:@wazoo/sparql-engine@~0.5.1",
       "npm:@rdfjs/types@^2.0.1",
       "npm:rdfjs-inference-engine@0.2.2",
       "npm:rdfxml-streaming-parser@3.1.0"

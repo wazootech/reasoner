@@ -6,6 +6,7 @@ import {
   type RuleOptions,
 } from "@/custom-rule.ts";
 import type { Rule } from "@/rule.ts";
+import { generalizedQuad } from "@/generalized-quad.ts";
 import { Engine, type EngineStatistics } from "@/engine.ts";
 import type { Fact, Relation } from "@/relation.ts";
 import { factKey } from "@/relation.ts";
@@ -621,11 +622,7 @@ class Core {
     const subject = terms.term(s);
     const object = terms.term(o);
     if (!shown(subject, predicate, object, view)) return undefined;
-    return dataFactory.quad(
-      subject as Quad["subject"],
-      predicate as NamedNode,
-      object as Quad["object"],
-    );
+    return generalizedQuad(subject, predicate as NamedNode, object);
   }
 }
 
@@ -968,12 +965,9 @@ export class Reasoner {
     for (const { subject, predicate, object } of quads) {
       const key = tripleKey(subject, predicate, object);
       for (const gk of this.#labelsOf(key)) {
-        out.push(dataFactory.quad(
-          subject,
-          predicate,
-          object,
-          this.#graphTerm(gk) as Quad["graph"],
-        ));
+        out.push(
+          generalizedQuad(subject, predicate, object, this.#graphTerm(gk)),
+        );
       }
     }
     return out;

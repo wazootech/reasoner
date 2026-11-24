@@ -5,6 +5,7 @@
 import { assert, assertFalse } from "@std/assert";
 import { parseTurtleQuads } from "@wazoo/sparql-engine/parser";
 import { dataFactory } from "@wazoo/sparql-engine/term";
+import { generalizedQuad } from "@/generalized-quad.ts";
 import { Reasoner } from "@/mod.ts";
 
 const PREFIXES = `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
@@ -522,7 +523,7 @@ Deno.test("rule dt-eq: owl:differentFrom between equal values is inconsistent", 
     `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .`,
   );
   reasoner.extend([
-    dataFactory.quad(
+    generalizedQuad(
       lit("1", "integer"),
       named(OWL + "differentFrom"),
       lit("1.0", "decimal"),
