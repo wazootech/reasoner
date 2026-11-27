@@ -2,7 +2,7 @@
  * Scaling benchmark: closure time and memory for seeded synthetic graphs of
  * growing size, with and without `owl:sameAs` producers.
  *
- *     deno task bench [--sizes 1e3,1e4,1e5,1e6]
+ *     bun run bench [--sizes 1e3,1e4,1e5,1e6]
  *                     [--profile plain|equality|sameas|delete|fpliteral] [--check]
  *
  * With `--check` the run fails when a time is over its limit in

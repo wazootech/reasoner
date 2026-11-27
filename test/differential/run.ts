@@ -1,4 +1,4 @@
-// Usage: deno task test:differential [--seeds N] [--graph-stride K] [--verbose]
+// Usage: bun run test:differential [--seeds N] [--graph-stride K] [--verbose]
 // Exits 1 when a failure class is not in expected-failures.json, or when a
 // pinned repro in it no longer fails with its class (so the list cannot rot).
 import { readFileSync } from "node:fs";

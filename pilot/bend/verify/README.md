@@ -112,11 +112,11 @@ Needs Bend 2.0.x, and for `--verdict` Lean v4.34.0 on the PATH (elan).
 ```sh
 bend pilot/bend/verify/RL_PROOF.bend --verdict   # ALL PROOFS CHECK (under a minute)
 bend pilot/bend/verify/PROOF.bend --verdict      # the one-rule model
-deno test --allow-read --allow-write --allow-run --allow-env pilot/bend/
+bun test pilot/bend/
 ```
 
 The Bend tests skip themselves when `bend` is not on the PATH. None of it is in
-CI: `pilot/` is outside `deno task test`.
+CI: `pilot/` is outside `bun run test`.
 
 ## How far to trust it
 

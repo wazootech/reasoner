@@ -19,8 +19,8 @@
  * The run fails if a test listed in `expected-pass.json` fails. A test that
  * newly passes is reported so the list can grow with `--update`.
  *
- *     deno task test:w3c [--verbose]
- *     deno task test:w3c:update
+ *     bun run test:w3c [--verbose]
+ *     bun run test:w3c:update
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import process from "node:process";

@@ -12,7 +12,7 @@
  * Every difference must be one of the {@link DIVERGENCES}; anything else
  * fails the run.
  *
- *     deno task test:parity [file.nt ...]
+ *     bun run test:parity [file.nt ...]
  */
 import { readdirSync, readFileSync } from "node:fs";
 import process from "node:process";

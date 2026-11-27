@@ -4,7 +4,7 @@
  * the full Reasoner's closure on the `plain` bench profile, with every triple
  * the reference leaves out attributed to a rule outside its six.
  *
- *     deno test --allow-read pilot/bend/reference_test.ts
+ *     bun test pilot/bend/reference_test.ts
  */
 import { test } from "node:test";
 import { assertEquals } from "../../test/asserts.ts";

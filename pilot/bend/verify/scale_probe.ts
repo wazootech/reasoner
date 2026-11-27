@@ -3,8 +3,7 @@
  * `plain` bench profile, naive and semi-naive, against the TypeScript
  * reference. Needs `bend` on the PATH.
  *
- *     deno run --allow-read --allow-write --allow-run --allow-env \
- *       pilot/bend/verify/scale_probe.ts 100 200 400
+ *     bun pilot/bend/verify/scale_probe.ts 100 200 400
  */
 import process from "node:process";
 import { generate } from "../../../bench/scaling.ts";

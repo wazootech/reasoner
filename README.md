@@ -5,7 +5,7 @@ An OWL 2 RL reasoner over RDF/JS quad stores, built alongside
 
 **Status: 0.4.1.** The OWL 2 RL ruleset, the semi-naive engine, `owl:sameAs` as
 a union-find, incremental additions (`extend`) and retraction (`retract`) work,
-and `deno task test:differential` finds no difference between `extend` or
+and `bun run test:differential` finds no difference between `extend` or
 `retract` and a fresh run on 5,000 random graphs. Worlds uses it for opt-in
 inference on the Cloudflare backend: derived quads are stored in their own
 column and skipped by search reindexing
@@ -106,26 +106,26 @@ reasoner.addRule(anotherRule); // also fine after run(); recomputes once
 
 ## Testing
 
-- `deno task ci`: format, lint, type-check, unit tests.
-- `deno task test:parity`: the closure against the Wiki's current engine
+- `bun run ci`: format, lint, type-check, unit tests.
+- `bun run test:parity`: the closure against the Wiki's current engine
   (`rdfjs-inference-engine`), triple for triple, on the corpora in
   `test/parity/corpora/`. Every difference must be a documented divergence.
-- `deno task test:w3c`: the W3C OWL 2 RL test cases (approved and proposed),
+- `bun run test:w3c`: the W3C OWL 2 RL test cases (approved and proposed),
   fetched from w3.org into `.cache/`. A test in `test/w3c/expected-pass.json`
-  that fails is a regression; `deno task test:w3c:update` records new passes.
-- `deno task test:differential [--seeds N]`: `Reasoner.extend` and `retract`
+  that fails is a regression; `bun run test:w3c:update` records new passes.
+- `bun run test:differential [--seeds N]`: `Reasoner.extend` and `retract`
   against a fresh run on random graphs (modes extend, retract, retract-instance,
   retract-full, extend-custom, retract-custom, and, with triples spread over
   four named graphs, union-extend, union-retract, graphs-extend, graphs-retract,
   graphs-retract-partial; the graph modes run on every third seed unless
   `--graph-stride 1`); exits 1 on a new failure class. CI runs 1000 seeds (about
   7 s); a nightly workflow runs 5000.
-- `deno task bench`: closure time and memory on synthetic graphs
+- `bun run bench`: closure time and memory on synthetic graphs
   (`--sizes 1e3,1e4,1e5 --profile plain|equality`).
 
 ## Conformance
 
-- **W3C OWL 2 RL suite** (`deno task test:w3c`): 88 of 90 pass. The harness
+- **W3C OWL 2 RL suite** (`bun run test:w3c`): 88 of 90 pass. The harness
   reads tests given in OWL functional syntax (a subset, `functional-syntax.ts`),
   follows `owl:imports`, and ignores annotations in the conclusion of
   Direct-Semantics tests. Two conclusions are not entailed, each with its reason
@@ -153,7 +153,7 @@ reasoner.addRule(anotherRule); // also fine after run(); recomputes once
   dateTime, binary, anyURI and other datatypes still have one term per spelling,
   no `owl:differentFrom` is materialized between distinct literals, and `dt-eq`
   is never applied to unrelated literals.
-- **Parity with `rdfjs-inference-engine`** (`deno task test:parity`): identical
+- **Parity with `rdfjs-inference-engine`** (`bun run test:parity`): identical
   closures on `bench-1e3`, `docs`, `micro`, and `owl-nosame`. On `owl` this
   package derives two extra triples, a documented divergence (`eq-rep` applied
   to an ontology triple).

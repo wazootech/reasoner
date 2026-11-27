@@ -7,8 +7,7 @@
  * `[s, p, o, ...]` that `encode.ts` produces, and the result comes back the
  * same way. Needs `bend` on the PATH and is skipped without it.
  *
- *     deno test --allow-read --allow-write --allow-run --allow-env \
- *       pilot/bend/verify/rl_oracle_test.ts
+ *     bun test pilot/bend/verify/rl_oracle_test.ts
  */
 import { test } from "node:test";
 import { assert, assertEquals } from "../../../test/asserts.ts";

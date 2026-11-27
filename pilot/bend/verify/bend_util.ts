@@ -10,7 +10,8 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assert } from "../../../test/asserts.ts";
 
-// deno-lint-ignore no-explicit-any -- the generated module is untyped
+// `any` is allowed in this file only (.oxlintrc.json): the generated module
+// is untyped.
 export type Bend = any;
 
 /** hasBend reports whether the `bend` binary is on the PATH. */

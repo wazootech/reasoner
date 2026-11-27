@@ -9,8 +9,7 @@
  * subClassOf edges. It compiles `sco.bend` with `bend -o`, so it needs `bend`
  * on the PATH and is skipped without it.
  *
- *     deno test --allow-read --allow-write --allow-run --allow-env \
- *       pilot/bend/verify/oracle_test.ts
+ *     bun test pilot/bend/verify/oracle_test.ts
  */
 import { test } from "node:test";
 import { assert, assertEquals } from "../../../test/asserts.ts";
