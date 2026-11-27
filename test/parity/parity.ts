@@ -14,6 +14,9 @@
  *
  *     deno task test:parity [file.nt ...]
  */
+import { readdirSync, readFileSync } from "node:fs";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Quad, Term } from "@rdfjs/types";
@@ -75,10 +78,10 @@ const require = createRequire(import.meta.url);
 const ENGINE_ROOT = dirname(
   dirname(dirname(require.resolve("rdfjs-inference-engine"))),
 );
-const RULES = Deno.readTextFileSync(
+const RULES = readFileSync(
   join(ENGINE_ROOT, "rules/owl2rl/owl2rl-eyeling.n3"),
-)
-  .replaceAll("\r\n", "\n");
+  "utf8",
+).replaceAll("\r\n", "\n");
 
 const DT_EQ_RULE = `{ ?n1 internal:term ?lt1 .
   ?n2 internal:term ?lt2 .
@@ -266,19 +269,16 @@ function compare(name: string, asserted: Quad[]): boolean {
 }
 
 const DEFAULT_DIR = new URL("./corpora/", import.meta.url);
-const files = Deno.args.length > 0
-  ? Deno.args
-  : [...Deno.readDirSync(DEFAULT_DIR)]
-    .filter((entry) => entry.name.endsWith(".nt"))
-    .map((entry) =>
-      new URL(entry.name, DEFAULT_DIR).pathname.replace(/^\/([A-Za-z]:)/, "$1")
-    )
-    .sort();
+const argv = process.argv.slice(2);
+const files = argv.length > 0 ? argv : readdirSync(DEFAULT_DIR)
+  .filter((name) => name.endsWith(".nt"))
+  .map((name) => fileURLToPath(new URL(name, DEFAULT_DIR)))
+  .sort();
 
 let ok = true;
 for (const file of files) {
   const name = file.split(/[\\/]/).pop()!.replace(/\.nt$/, "");
-  const asserted = parseTurtleQuads(Deno.readTextFileSync(file)).map((quad) =>
+  const asserted = parseTurtleQuads(readFileSync(file, "utf8")).map((quad) =>
     dataFactory.quad(quad.subject, quad.predicate, quad.object)
   );
   ok = compare(name, asserted) && ok;
@@ -287,5 +287,5 @@ if (!ok) {
   console.error(
     "Parity failed: differences outside the documented divergences.",
   );
-  Deno.exit(1);
+  process.exit(1);
 }

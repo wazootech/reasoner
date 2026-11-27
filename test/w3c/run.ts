@@ -22,8 +22,10 @@
  *     deno task test:w3c [--verbose]
  *     deno task test:w3c:update
  */
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import process from "node:process";
 import type { Quad, Term } from "@rdfjs/types";
-import { parseArgs } from "@std/cli/parse-args";
+import { parseArgs } from "node:util";
 import { RdfXmlParser } from "rdfxml-streaming-parser";
 import { dataFactory, termKey } from "@wazoo/sparql-engine/term";
 import { Reasoner } from "@/mod.ts";
@@ -66,13 +68,13 @@ interface TestCase {
 async function cached(url: string): Promise<string> {
   const file = new URL(url.replace(/[^A-Za-z0-9.-]+/g, "_"), CACHE);
   try {
-    return await Deno.readTextFile(file);
+    return await readFile(file, "utf8");
   } catch {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
     const text = await response.text();
-    await Deno.mkdir(CACHE, { recursive: true });
-    await Deno.writeTextFile(file, text);
+    await mkdir(CACHE, { recursive: true });
+    await writeFile(file, text);
     return text;
   }
 }
@@ -390,9 +392,13 @@ async function run(test: TestCase): Promise<Outcome> {
   return { ok: true };
 }
 
-const args = parseArgs(Deno.args, {
-  boolean: ["update", "verbose"],
-  string: ["explain"],
+const { values: args } = parseArgs({
+  args: process.argv.slice(2),
+  options: {
+    update: { type: "boolean", default: false },
+    verbose: { type: "boolean", default: false },
+    explain: { type: "string" },
+  },
 });
 const { update, verbose, explain } = args;
 const tests = new Map<string, TestCase>();
@@ -404,9 +410,9 @@ for (const manifest of MANIFESTS) {
   }
 }
 const knownGaps: Record<string, string> = JSON.parse(
-  await Deno.readTextFile(KNOWN_GAPS),
+  await readFile(KNOWN_GAPS, "utf8"),
 );
-const expected = new Set<string>(JSON.parse(await Deno.readTextFile(EXPECTED)));
+const expected = new Set<string>(JSON.parse(await readFile(EXPECTED, "utf8")));
 const passed: string[] = [];
 const regressions: string[] = [];
 const newlyPassing: string[] = [];
@@ -448,7 +454,7 @@ for (const [reason, count] of [...reasons].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${count} × ${reason}`);
 }
 if (update) {
-  await Deno.writeTextFile(
+  await writeFile(
     EXPECTED,
     JSON.stringify(passed.sort(), null, 2) + "\n",
   );
@@ -463,10 +469,10 @@ if (update) {
     console.error(
       `Passing but listed in known-gaps.json: ${staleGaps.join(", ")}`,
     );
-    Deno.exit(1);
+    process.exit(1);
   }
   if (regressions.length > 0) {
     console.error(`Regressions:\n  ${regressions.join("\n  ")}`);
-    Deno.exit(1);
+    process.exit(1);
   }
 }

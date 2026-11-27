@@ -6,7 +6,8 @@
  *
  *     deno test --allow-read pilot/bend/reference_test.ts
  */
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../../test/asserts.ts";
 import { Reasoner } from "@/mod.ts";
 import { generate } from "../../bench/scaling.ts";
 import { encode, V } from "./encode.ts";
@@ -81,7 +82,7 @@ function randomGraph(seed: number): Uint32Array {
   return new Uint32Array(out);
 }
 
-Deno.test("reference equals brute force on 500 random graphs", () => {
+test("reference equals brute force on 500 random graphs", () => {
   for (let seed = 1; seed <= 500; seed++) {
     const input = randomGraph(seed);
     assertEquals(
@@ -92,10 +93,10 @@ Deno.test("reference equals brute force on 500 random graphs", () => {
   }
 });
 
-Deno.test({
-  name: "Bend model equals brute force on 40 random graphs",
-  ignore: !hasBend(),
-  fn: async () => {
+test(
+  "Bend model equals brute force on 40 random graphs",
+  { skip: !hasBend() },
+  async () => {
     // The Bend model's laws are proved in verify/RL_PROOF.bend; this ties the
     // proved model to the independent brute force, not just to `closure`.
     const bend = await load("rl.bend");
@@ -108,7 +109,7 @@ Deno.test({
       );
     }
   },
-});
+);
 
 /** leftOut counts, by predicate (and class for rdf:type), what Reasoner adds. */
 function leftOut(size: number): Map<string, number> {
@@ -141,7 +142,7 @@ const INSTANCE = {
   "type Literal": "dt-type2",
 };
 
-Deno.test("reference is a subset of Reasoner on plain, gaps attributed", () => {
+test("reference is a subset of Reasoner on plain, gaps attributed", () => {
   const [small, large] = [leftOut(1e3), leftOut(1e4)];
   for (const [size, missing] of [[1e3, small], [1e4, large]] as const) {
     // One literal name per person; one symmetric knows per person, less ties.

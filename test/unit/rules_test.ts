@@ -2,7 +2,8 @@
 // property, class, class axiom, schema and datatype rules). A case either
 // lists triples the closure must contain or names the rule an inconsistency
 // must report. The engine's own helper rules are exercised through these.
-import { assert, assertFalse } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertFalse } from "../asserts.ts";
 import { parseTurtleQuads } from "@wazoo/sparql-engine/parser";
 import { dataFactory } from "@wazoo/sparql-engine/term";
 import { generalizedQuad } from "@/generalized-quad.ts";
@@ -358,7 +359,7 @@ function closureOf(premise: string): Reasoner {
 }
 
 for (const [rule, c] of Object.entries(CASES)) {
-  Deno.test(`rule ${rule}`, () => {
+  test(`rule ${rule}`, () => {
     const reasoner = closureOf(c.premise);
     if (c.entails !== undefined) {
       for (const q of parseTurtleQuads(PREFIXES + c.entails)) {
@@ -387,7 +388,7 @@ const named = (iri: string) => dataFactory.namedNode(iri);
 const RDF_TYPE = named("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
 const OWL = "http://www.w3.org/2002/07/owl#";
 
-Deno.test("rule dt-type1: the supported datatypes are datatypes", () => {
+test("rule dt-type1: the supported datatypes are datatypes", () => {
   const reasoner = closureOf(`ex:a ex:p ex:b .`);
   assert(
     reasoner.has(
@@ -398,13 +399,13 @@ Deno.test("rule dt-type1: the supported datatypes are datatypes", () => {
   );
 });
 
-Deno.test("rule dt-type2: a literal is a member of its datatype", () => {
+test("rule dt-type2: a literal is a member of its datatype", () => {
   const reasoner = closureOf(`ex:a ex:p "1"^^xsd:integer .`);
   assert(reasoner.has(lit("1", "integer"), RDF_TYPE, named(XSD + "integer")));
   assert(reasoner.has(lit("1", "integer"), RDF_TYPE, named(XSD + "decimal")));
 });
 
-Deno.test("rule eq-ref is not materialized, as documented in rules.ts", () => {
+test("rule eq-ref is not materialized, as documented in rules.ts", () => {
   const reasoner = closureOf(`ex:a ex:p ex:b .`);
   assertFalse(
     reasoner.has(
@@ -419,7 +420,7 @@ const SAME_AS = named(OWL + "sameAs");
 const EX_B = named("https://reasoner.example/b");
 const EX_P = named("https://reasoner.example/p");
 
-Deno.test("rule dt-eq: equal decimal-space values of different spellings are one class", () => {
+test("rule dt-eq: equal decimal-space values of different spellings are one class", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .
 ex:c ex:p "01"^^xsd:int . ex:d ex:p "+1.00"^^xsd:decimal .`,
@@ -437,7 +438,7 @@ ex:c ex:p "01"^^xsd:int . ex:d ex:p "+1.00"^^xsd:decimal .`,
   assert(reasoner.has(lit("1.0", "decimal"), RDF_TYPE, named(XSD + "integer")));
 });
 
-Deno.test("rule dt-eq: booleans true and 1 are the same value", () => {
+test("rule dt-eq: booleans true and 1 are the same value", () => {
   const reasoner = closureOf(
     `ex:a ex:p "true"^^xsd:boolean . ex:b ex:p "1"^^xsd:boolean .
 ex:c ex:p "false"^^xsd:boolean . ex:d ex:p "0"^^xsd:boolean .`,
@@ -449,7 +450,7 @@ ex:c ex:p "false"^^xsd:boolean . ex:d ex:p "0"^^xsd:boolean .`,
   );
 });
 
-Deno.test("rule dt-eq: different values, other datatypes, ill-typed and NaN stay apart", () => {
+test("rule dt-eq: different values, other datatypes, ill-typed and NaN stay apart", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:a ex:p "2"^^xsd:integer .
 ex:a ex:p "1" . ex:a ex:p "01" . ex:a ex:p "1"^^xsd:boolean .
@@ -481,7 +482,7 @@ ex:a ex:p "0"^^xsd:double . ex:a ex:p "-0"^^xsd:double . ex:a ex:p "1.1"^^xsd:de
   );
 });
 
-Deno.test("rule dt-eq: floats equal floats and doubles equal doubles, never across spaces", () => {
+test("rule dt-eq: floats equal floats and doubles equal doubles, never across spaces", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1.1"^^xsd:double , "1.10"^^xsd:double , "1.1"^^xsd:float , "1.1"^^xsd:decimal .
 ex:b ex:p "1E21"^^xsd:double , "1000000000000000000000"^^xsd:double , "1000000000000000000000"^^xsd:integer .
@@ -511,14 +512,14 @@ ex:c ex:p "0"^^xsd:float , "+0.0"^^xsd:float , "INF"^^xsd:float , "+INF"^^xsd:fl
   assertFalse(reasoner.has(lit("0", "float"), SAME_AS, lit("INF", "float")));
 });
 
-Deno.test("rule dt-eq: a functional property with equal-valued spellings is consistent", () => {
+test("rule dt-eq: a functional property with equal-valued spellings is consistent", () => {
   const reasoner = closureOf(
     `ex:p a owl:FunctionalProperty . ex:a ex:p "1"^^xsd:integer , "1.0"^^xsd:decimal .`,
   );
   assertFalse(reasoner.inconsistencies().length > 0);
 });
 
-Deno.test("rule dt-eq: owl:differentFrom between equal values is inconsistent", () => {
+test("rule dt-eq: owl:differentFrom between equal values is inconsistent", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .`,
   );
@@ -532,7 +533,7 @@ Deno.test("rule dt-eq: owl:differentFrom between equal values is inconsistent", 
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
 
-Deno.test("rule dt-eq: hasKey merges individuals whose keys are equal values", () => {
+test("rule dt-eq: hasKey merges individuals whose keys are equal values", () => {
   const reasoner = closureOf(
     `ex:C owl:hasKey (ex:id) .
 ex:a a ex:C ; ex:id "1"^^xsd:integer . ex:b a ex:C ; ex:id "1.0"^^xsd:decimal .
@@ -554,7 +555,7 @@ ex:c a ex:C ; ex:id "2"^^xsd:integer .`,
   );
 });
 
-Deno.test("rule dt-eq: a value met later joins its class (extend and retract)", () => {
+test("rule dt-eq: a value met later joins its class (extend and retract)", () => {
   const reasoner = closureOf(`ex:a ex:p "1"^^xsd:integer .`);
   const parse = (turtle: string) => parseTurtleQuads(PREFIXES + turtle);
   assertFalse(
@@ -569,7 +570,7 @@ Deno.test("rule dt-eq: a value met later joins its class (extend and retract)", 
   );
 });
 
-Deno.test("rule dt-diff: different values are different", () => {
+test("rule dt-diff: different values are different", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:a ex:p "2"^^xsd:integer .
 ex:p a owl:FunctionalProperty .`,
@@ -584,12 +585,12 @@ ex:p a owl:FunctionalProperty .`,
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
 
-Deno.test("rule dt-not-type: an ill-typed literal is inconsistent", () => {
+test("rule dt-not-type: an ill-typed literal is inconsistent", () => {
   const reasoner = closureOf(`ex:a ex:p "x"^^xsd:integer .`);
   assert(reasoner.inconsistencies().some((i) => i.rule === "dt-not-type"));
 });
 
-Deno.test("rule prp-trp-chain: a transitive property is its own (p p) chain", () => {
+test("rule prp-trp-chain: a transitive property is its own (p p) chain", () => {
   const r = closureOf(`ex:p a owl:TransitiveProperty .`);
   const has = (view: "complete" | "application") =>
     [...r.closure(view)].filter((q) =>

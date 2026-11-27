@@ -1,17 +1,20 @@
 // Usage: deno task test:differential [--seeds N] [--graph-stride K] [--verbose]
 // Exits 1 when a failure class is not in expected-failures.json, or when a
 // pinned repro in it no longer fails with its class (so the list cannot rot).
+import { readFileSync } from "node:fs";
+import process from "node:process";
 import { classify, diff, fmt, MODES, runSeed } from "./differential.ts";
 import type { Failure, Mode, T3 } from "./differential.ts";
 
-const at = Deno.args.indexOf("--seeds");
-const SEEDS = at >= 0 ? Number(Deno.args[at + 1]) : 1000;
+const argv = process.argv.slice(2);
+const at = argv.indexOf("--seeds");
+const SEEDS = at >= 0 ? Number(argv[at + 1]) : 1000;
 // The named-graph modes build a reasoner per graph and cost about ten times
 // the others, so by default they run on every third seed; --graph-stride 1
 // runs them on every seed.
-const strideAt = Deno.args.indexOf("--graph-stride");
-const STRIDE = strideAt >= 0 ? Number(Deno.args[strideAt + 1]) : 3;
-const verbose = Deno.args.includes("--verbose");
+const strideAt = argv.indexOf("--graph-stride");
+const STRIDE = strideAt >= 0 ? Number(argv[strideAt + 1]) : 3;
+const verbose = argv.includes("--verbose");
 interface Expected {
   mode?: Mode;
   issue: string;
@@ -21,7 +24,7 @@ interface Expected {
   delta: T3[];
 }
 const expected: Record<string, Expected> = JSON.parse(
-  Deno.readTextFileSync(new URL("./expected-failures.json", import.meta.url)),
+  readFileSync(new URL("./expected-failures.json", import.meta.url), "utf8"),
 );
 
 const classes = new Map<string, { count: number; smallest: Failure }>();
@@ -63,4 +66,4 @@ for (const [cls, e] of Object.entries(expected)) {
     bad = true;
   }
 }
-Deno.exit(bad ? 1 : 0);
+process.exit(bad ? 1 : 0);
