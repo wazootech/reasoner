@@ -30,7 +30,7 @@ const ex = (name: string) => dataFactory.namedNode(EX + name);
 const iri = (value: string) => dataFactory.namedNode(value);
 
 function entails(reasoner: Reasoner, s: string, p: string, o: string): boolean {
-  const term = (name: string) => name.includes(":") ? iri(name) : ex(name);
+  const term = (name: string) => (name.includes(":") ? iri(name) : ex(name));
   return reasoner.has(term(s), term(p), term(o));
 }
 
@@ -65,8 +65,9 @@ ex:a ex:knows ex:d .
 ex:e ex:likes ex:c .
 `);
   const closure = new Set(
-    [...reasoner.closure()].map((quad) =>
-      `${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`
+    [...reasoner.closure()].map(
+      (quad) =>
+        `${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`,
     ),
   );
   for (const x of ["a", "b", "c"]) {
@@ -125,7 +126,10 @@ ex:rex a ex:Cat , ex:Dog .
 ex:age a owl:FunctionalProperty .
 ex:tom ex:age "3"^^xsd:integer , "4"^^xsd:integer .
 `);
-  const rules = reasoner.inconsistencies().map((report) => report.rule).sort();
+  const rules = reasoner
+    .inconsistencies()
+    .map((report) => report.rule)
+    .sort();
   assert(rules.includes("cax-dw"), rules.join());
   assert(rules.includes("eq-diff1"), rules.join());
 });
@@ -158,11 +162,13 @@ ex:gus ex:hasMother ex:m1 .
 ex:m1 ex:livesIn ex:town .
 `);
   const before = new Set([...reasoner.closure()].map(key));
-  const added = reasoner.extend(quads(`
+  const added = reasoner.extend(
+    quads(`
 ex:bob a ex:Student .
 ex:alice a ex:Student .
 ex:gus ex:hasMother ex:m2 .
-`));
+`),
+  );
   const after = new Set([...reasoner.closure()].map(key));
   const expected = [...after].filter((triple) => !before.has(triple)).sort();
   assertEquals([...new Set(added.map(key))].sort(), expected);
@@ -298,11 +304,17 @@ ex:m ex:n "0.0"^^xsd:float, "0"^^xsd:float .
 });
 
 function closureKeys(reasoner: Reasoner): string[] {
-  return [...reasoner.closure("complete")].map((q) =>
-    [q.subject, q.predicate, q.object].map((t) =>
-      t.termType === "Literal" ? `"${t.value}"^^${t.datatype.value}` : t.value
-    ).join(" ")
-  ).sort();
+  return [...reasoner.closure("complete")]
+    .map((q) =>
+      [q.subject, q.predicate, q.object]
+        .map((t) =>
+          t.termType === "Literal"
+            ? `"${t.value}"^^${t.datatype.value}`
+            : t.value,
+        )
+        .join(" "),
+    )
+    .sort();
 }
 
 test("retract removes a triple and what only it entailed", () => {
@@ -317,8 +329,9 @@ ex:alice a ex:Student .
   assertFalse(entails(reasoner, "alice", RDF_TYPE, "Person"));
   assert(entails(reasoner, "alice", RDF_TYPE, "Student"));
   assert(
-    removed.some((q) =>
-      q.subject.value === EX + "alice" && q.object.value === EX + "Person"
+    removed.some(
+      (q) =>
+        q.subject.value === EX + "alice" && q.object.value === EX + "Person",
     ),
   );
 });
@@ -434,9 +447,10 @@ test("distinct literal values of a functional property derive no differentFrom b
   const lines = ["ex:id a owl:FunctionalProperty ."];
   for (let i = 0; i < 40; i++) lines.push(`ex:s${i} ex:id "v${i}" .`);
   const reasoner = reason(lines.join("\n"));
-  const different = [...reasoner.closure("complete")].filter((q) =>
-    q.predicate.value === `${OWL}differentFrom` &&
-    q.subject.value.startsWith(EX)
+  const different = [...reasoner.closure("complete")].filter(
+    (q) =>
+      q.predicate.value === `${OWL}differentFrom` &&
+      q.subject.value.startsWith(EX),
   );
   assertEquals(different.length, 0);
 });
@@ -466,24 +480,26 @@ const RDFS_SUBCLASS = "http://www.w3.org/2000/01/rdf-schema#subClassOf";
 
 function inGraph(g: ReturnType<typeof graph>, turtle: string): Quad[] {
   return quads(turtle).map((q) =>
-    dataFactory.quad(q.subject, q.predicate, q.object, g)
+    dataFactory.quad(q.subject, q.predicate, q.object, g),
   );
 }
 
 /** listed is the graph of every closure quad for the triple, sorted. */
 function listed(r: Reasoner, s: string, p: string, o: string): string[] {
-  const term = (name: string) => name.includes(":") ? iri(name) : ex(name);
+  const term = (name: string) => (name.includes(":") ? iri(name) : ex(name));
   return [...r.closure("complete")]
-    .filter((q) =>
-      q.subject.equals(term(s)) && q.predicate.equals(term(p)) &&
-      q.object.equals(term(o))
+    .filter(
+      (q) =>
+        q.subject.equals(term(s)) &&
+        q.predicate.equals(term(p)) &&
+        q.object.equals(term(o)),
     )
     .map((q) =>
       q.graph.termType === "DefaultGraph"
         ? "default"
         : q.graph.equals(DERIVED_GRAPH)
-        ? "derived"
-        : q.graph.value.replace(EX, "")
+          ? "derived"
+          : q.graph.value.replace(EX, ""),
     )
     .sort();
 }
@@ -491,10 +507,12 @@ function listed(r: Reasoner, s: string, p: string, o: string): string[] {
 function twoGraphs(options?: ReasonerOptions): Reasoner {
   const r = new Reasoner(options);
   r.add(inGraph(graph("schema"), "ex:Student rdfs:subClassOf ex:Person ."));
-  r.add(inGraph(
-    graph("data"),
-    "ex:alice a ex:Student . ex:likes a owl:SymmetricProperty . ex:alice ex:likes ex:bob .",
-  ));
+  r.add(
+    inGraph(
+      graph("data"),
+      "ex:alice a ex:Student . ex:likes a owl:SymmetricProperty . ex:alice ex:likes ex:bob .",
+    ),
+  );
   r.run();
   return r;
 }
@@ -554,10 +572,7 @@ test("retract: a triple asserted in another graph stays entailed", () => {
   r.add(inGraph(graph("b"), "ex:Student rdfs:subClassOf ex:Person ."));
   r.run();
   const removed = r.retract(a);
-  assertEquals(
-    removed.map((q) => q.graph.value.replace(EX, "")).sort(),
-    ["a"],
-  );
+  assertEquals(removed.map((q) => q.graph.value.replace(EX, "")).sort(), ["a"]);
   assert(r.has(ex("alice"), iri(RDF_TYPE), ex("Person")));
   assertEquals(listed(r, "alice", RDF_TYPE, "Person"), ["b"]);
 });
@@ -569,8 +584,8 @@ test("retract: dropping the schema graph's triple removes the derived quad", () 
     "application",
   );
   assert(
-    removed.some((q) =>
-      q.object.equals(ex("Person")) && q.graph.equals(DERIVED_GRAPH)
+    removed.some(
+      (q) => q.object.equals(ex("Person")) && q.graph.equals(DERIVED_GRAPH),
     ),
   );
   assertFalse(r.has(ex("alice"), iri(RDF_TYPE), ex("Person")));
@@ -583,9 +598,13 @@ test("extend: new quads carry their graph", () => {
     "application",
   );
   const byObject = (name: string) =>
-    added.filter((q) => q.object.equals(ex(name))).map((q) =>
-      q.graph.equals(DERIVED_GRAPH) ? "derived" : q.graph.value.replace(EX, "")
-    );
+    added
+      .filter((q) => q.object.equals(ex(name)))
+      .map((q) =>
+        q.graph.equals(DERIVED_GRAPH)
+          ? "derived"
+          : q.graph.value.replace(EX, ""),
+      );
   assertEquals(byObject("Student"), ["data"]);
   assertEquals(byObject("Person"), ["derived"]);
 });
@@ -602,11 +621,17 @@ test("inconsistencies name the graph, or the derived graph", () => {
     ),
   );
   r.run();
-  const reports = r.inconsistencies().map((i) =>
-    `${i.rule}@${
-      i.graph.equals(DERIVED_GRAPH) ? "derived" : i.graph.value.replace(EX, "")
-    }`
-  ).sort();
+  const reports = r
+    .inconsistencies()
+    .map(
+      (i) =>
+        `${i.rule}@${
+          i.graph.equals(DERIVED_GRAPH)
+            ? "derived"
+            : i.graph.value.replace(EX, "")
+        }`,
+    )
+    .sort();
   // cls-com fires alongside cax-dw, so only these two rules are compared.
   assertEquals(
     [...new Set(reports)].filter((x) => /^(cax-dw|eq-diff1)@/.test(x)),

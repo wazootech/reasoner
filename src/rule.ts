@@ -77,7 +77,7 @@ export function filter(
     name,
     inputs,
     outputs: [],
-    run: (values, context) => test(values, context) ? PASS : FAIL,
+    run: (values, context) => (test(values, context) ? PASS : FAIL),
   };
 }
 
@@ -97,15 +97,18 @@ export function bind(
  */
 export function variables(): Record<string, Variable> {
   const cache = new Map<string, Variable>();
-  return new Proxy({}, {
-    get(_target, name) {
-      if (typeof name !== "string") return undefined;
-      let variable = cache.get(name);
-      if (variable === undefined) {
-        variable = new Variable(name);
-        cache.set(name, variable);
-      }
-      return variable;
+  return new Proxy(
+    {},
+    {
+      get(_target, name) {
+        if (typeof name !== "string") return undefined;
+        let variable = cache.get(name);
+        if (variable === undefined) {
+          variable = new Variable(name);
+          cache.set(name, variable);
+        }
+        return variable;
+      },
     },
-  }) as Record<string, Variable>;
+  ) as Record<string, Variable>;
 }

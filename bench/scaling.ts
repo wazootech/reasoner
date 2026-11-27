@@ -199,9 +199,9 @@ if (import.meta.main) {
       console.log(
         `| ${quads.length} | delete | built ${(built / 1000).toFixed(2)} s | ` +
           `retract ${gone.length} triples: ${(ms / 1000).toFixed(2)} s, ` +
-          `${removed} removed | fresh run on the rest: ${
-            (freshMs / 1000).toFixed(2)
-          } s | |`,
+          `${removed} removed | fresh run on the rest: ${(
+            freshMs / 1000
+          ).toFixed(2)} s | |`,
       );
       const limit = thresholds.profiles[profile]?.[String(size)];
       if (limit !== undefined && ms > limit) {
@@ -211,9 +211,9 @@ if (import.meta.main) {
     }
     console.log(
       `| ${quads.length} | ${profile} | ${closure} | ${stats.merges} | ${stats.rounds} | ` +
-        `${(ms / 1000).toFixed(2)} s | ${
-          (ms / (quads.length / 1000)).toFixed(1)
-        } | ` +
+        `${(ms / 1000).toFixed(2)} s | ${(ms / (quads.length / 1000)).toFixed(
+          1,
+        )} | ` +
         `${peakRssMb()} MB |`,
     );
     const limit = thresholds.profiles[profile]?.[String(size)];
@@ -222,13 +222,15 @@ if (import.meta.main) {
     }
     // Ignore sub-100 ms baselines: the ratio of two tiny times is noise.
     if (
-      previous !== undefined && size === previous.size * 2 &&
-      previous.ms >= 100 && ms / previous.ms > thresholds.maxDoublingRatio
+      previous !== undefined &&
+      size === previous.size * 2 &&
+      previous.ms >= 100 &&
+      ms / previous.ms > thresholds.maxDoublingRatio
     ) {
       failures.push(
-        `${profile} ${previous.size} -> ${size}: x${
-          (ms / previous.ms).toFixed(1)
-        } per doubling > x${thresholds.maxDoublingRatio}`,
+        `${profile} ${previous.size} -> ${size}: x${(ms / previous.ms).toFixed(
+          1,
+        )} per doubling > x${thresholds.maxDoublingRatio}`,
       );
     }
     previous = { size, ms };

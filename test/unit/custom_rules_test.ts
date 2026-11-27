@@ -13,14 +13,16 @@ const { x, y, z } = variables();
 
 const grandparent: CustomRule = {
   name: "grandparent",
-  body: [[x!, ex("parent"), y!], [y!, ex("parent"), z!]],
+  body: [
+    [x!, ex("parent"), y!],
+    [y!, ex("parent"), z!],
+  ],
   head: [[x!, ex("grandparent"), z!]],
 };
 
 const keys = (quads: Iterable<Quad>) =>
-  [...quads].map((q) =>
-    `${q.subject.value} ${q.predicate.value} ${q.object.value}`
-  )
+  [...quads]
+    .map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`)
     .sort();
 
 test("custom rule derives triples from the constructor option", () => {
@@ -33,11 +35,14 @@ test("custom rule derives triples from the constructor option", () => {
 
 test("custom rule chains with OWL 2 RL rules in one fixpoint", () => {
   const r = new Reasoner({
-    rules: [grandparent, {
-      name: "ancestor-of-grand",
-      body: [[x!, ex("grandparent"), y!]],
-      head: [[x!, ex("kin"), y!]],
-    }],
+    rules: [
+      grandparent,
+      {
+        name: "ancestor-of-grand",
+        body: [[x!, ex("grandparent"), y!]],
+        head: [[x!, ex("kin"), y!]],
+      },
+    ],
   });
   r.add([
     triple("parent", "sub", "parent2"),
@@ -68,10 +73,7 @@ test("extend reports what custom rules newly derive", () => {
   const added = r.extend([triple("b", "parent", "c")]);
   assertEquals(
     keys(added),
-    keys([
-      triple("b", "parent", "c"),
-      triple("a", "grandparent", "c"),
-    ]),
+    keys([triple("b", "parent", "c"), triple("a", "grandparent", "c")]),
   );
 });
 
@@ -83,10 +85,7 @@ test("retract with a custom rule equals a fresh run", () => {
   const removed = r.retract([triple("c", "parent", "d")]);
   assertEquals(
     keys(removed),
-    keys([
-      triple("c", "parent", "d"),
-      triple("b", "grandparent", "d"),
-    ]),
+    keys([triple("c", "parent", "d"), triple("b", "grandparent", "d")]),
   );
   const fresh = new Reasoner({ rules: [grandparent] });
   fresh.add(base);
@@ -96,11 +95,13 @@ test("retract with a custom rule equals a fresh run", () => {
 
 test("an inconsistent head reports the rule name and terms", () => {
   const r = new Reasoner({
-    rules: [{
-      name: "no-self-parent",
-      body: [[x!, ex("parent"), x!]],
-      inconsistent: [x!],
-    }],
+    rules: [
+      {
+        name: "no-self-parent",
+        body: [[x!, ex("parent"), x!]],
+        inconsistent: [x!],
+      },
+    ],
   });
   r.add([triple("a", "parent", "a")]);
   r.run();
@@ -112,11 +113,13 @@ test("an inconsistent head reports the rule name and terms", () => {
 
 test("derived triples follow the closure view filters", () => {
   const r = new Reasoner({
-    rules: [{
-      name: "label-as-subject",
-      body: [[x!, ex("name"), y!]],
-      head: [[y!, ex("namedBy"), x!]],
-    }],
+    rules: [
+      {
+        name: "label-as-subject",
+        body: [[x!, ex("name"), y!]],
+        head: [[y!, ex("namedBy"), x!]],
+      },
+    ],
   });
   r.add([df.quad(ex("a"), ex("name"), df.literal("A"))]);
   r.run();
@@ -197,7 +200,10 @@ test("extend sees a rule constant that is merged into another term", () => {
   // (a p1 b) match both atoms without being renamed, so extend must re-seed it.
   const clash: CustomRule = {
     name: "clash",
-    body: [[x!, ex("p1"), y!], [x!, ex("p2"), y!]],
+    body: [
+      [x!, ex("p1"), y!],
+      [x!, ex("p2"), y!],
+    ],
     inconsistent: [x!, y!],
   };
   const sameAs = (a: string, b: string) =>

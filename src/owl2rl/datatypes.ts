@@ -79,31 +79,31 @@ export type DatatypeValue =
   | { family: "literal"; comparable: false }
   | { family: "string"; value: string; comparable: true }
   | {
-    family: "langString" | "plainLiteral";
-    value: string;
-    lang: string;
-    comparable: true;
-  }
+      family: "langString" | "plainLiteral";
+      value: string;
+      lang: string;
+      comparable: true;
+    }
   | { family: "xmlLiteral" | "anyURI"; value: string; comparable: true }
   | { family: "boolean"; value: boolean; comparable: true }
   | { family: "binary"; bytes: number[]; comparable: true }
   | {
-    family: "numeric";
-    kind: "decimal";
-    num: bigint;
-    scale: number;
-    comparable: true;
-  }
+      family: "numeric";
+      kind: "decimal";
+      num: bigint;
+      scale: number;
+      comparable: true;
+    }
   | { family: "numeric"; kind: "floating"; value: number; comparable: boolean }
   | {
-    family: "dateTime";
-    hasTimezone: boolean;
-    totalSeconds: bigint;
-    fracNum: bigint;
-    fracScale: number;
-    localKey: string;
-    comparable: true;
-  };
+      family: "dateTime";
+      hasTimezone: boolean;
+      totalSeconds: bigint;
+      fracNum: bigint;
+      fracScale: number;
+      localKey: string;
+      comparable: true;
+    };
 
 /** literalDatatype is the datatype IRI of `literal`, `rdf:langString` if tagged. */
 export function literalDatatype(literal: Literal): string {
@@ -154,7 +154,9 @@ export function isInstanceOf(literal: Literal, datatype: string): boolean {
 function inDecimalSpace(literal: Literal, datatype: string): boolean {
   const value = literalValue(literal);
   if (
-    value === null || value.family !== "numeric" || value.kind !== "decimal"
+    value === null ||
+    value.family !== "numeric" ||
+    value.kind !== "decimal"
   ) {
     return false;
   }
@@ -162,8 +164,9 @@ function inDecimalSpace(literal: Literal, datatype: string): boolean {
   if (value.scale !== 0) return false;
   if (datatype === XSD_INTEGER) return true;
   const [min, max] = INTEGER_BOUNDS.get(datatype)!;
-  return (min === null || value.num >= min) &&
-    (max === null || value.num <= max);
+  return (
+    (min === null || value.num >= min) && (max === null || value.num <= max)
+  );
 }
 
 /** isInvalidFor is `true` for a supported `datatype` that `literal` is not in. */
@@ -254,21 +257,22 @@ function sameValue(a: DatatypeValue, b: DatatypeValue): boolean {
       if (b.family !== "numeric") return false;
       if (a.kind === "decimal" && b.kind === "decimal") {
         const scale = Math.max(a.scale, b.scale);
-        return a.num * 10n ** BigInt(scale - a.scale) ===
-          b.num * 10n ** BigInt(scale - b.scale);
+        return (
+          a.num * 10n ** BigInt(scale - a.scale) ===
+          b.num * 10n ** BigInt(scale - b.scale)
+        );
       }
-      const left = a.kind === "decimal"
-        ? Number(a.num) / 10 ** a.scale
-        : a.value;
-      const right = b.kind === "decimal"
-        ? Number(b.num) / 10 ** b.scale
-        : b.value;
+      const left =
+        a.kind === "decimal" ? Number(a.num) / 10 ** a.scale : a.value;
+      const right =
+        b.kind === "decimal" ? Number(b.num) / 10 ** b.scale : b.value;
       if (Number.isNaN(left) || Number.isNaN(right) || left !== right) {
         return false;
       }
       // xsd:float and xsd:double keep +0 and -0 as distinct values.
-      return a.kind !== "floating" || b.kind !== "floating" ||
-        Object.is(left, right);
+      return (
+        a.kind !== "floating" || b.kind !== "floating" || Object.is(left, right)
+      );
     }
     case "dateTime": {
       if (b.family !== "dateTime" || a.hasTimezone !== b.hasTimezone) {
@@ -277,8 +281,10 @@ function sameValue(a: DatatypeValue, b: DatatypeValue): boolean {
       if (!a.hasTimezone) return a.localKey === b.localKey;
       if (a.totalSeconds !== b.totalSeconds) return false;
       const scale = Math.max(a.fracScale, b.fracScale);
-      return a.fracNum * 10n ** BigInt(scale - a.fracScale) ===
-        b.fracNum * 10n ** BigInt(scale - b.fracScale);
+      return (
+        a.fracNum * 10n ** BigInt(scale - a.fracScale) ===
+        b.fracNum * 10n ** BigInt(scale - b.fracScale)
+      );
     }
     default:
       return false;
@@ -311,7 +317,9 @@ function stringValue(lexical: string, datatype: string): DatatypeValue | null {
   } else if (datatype !== XSD_STRING) {
     // Collapsed-whitespace datatypes accept only already-collapsed spellings.
     if (
-      /[\t\n\r]/.test(lexical) || /^ | $/.test(lexical) || / {2,}/.test(lexical)
+      /[\t\n\r]/.test(lexical) ||
+      /^ | $/.test(lexical) ||
+      / {2,}/.test(lexical)
     ) {
       return null;
     }
@@ -319,21 +327,30 @@ function stringValue(lexical: string, datatype: string): DatatypeValue | null {
   if (datatype === XSD_NS + "language") {
     if (!isValidLanguageTag(lexical, false)) return null;
   } else if (datatype === XSD_NS + "Name") {
-    if (!/^[:_\p{L}][\u0300-\u036F:_\p{L}\p{N}.\-\u00B7\u203F-\u2040]*$/u.test(lexical)) {
+    if (
+      !/^[:_\p{L}][\u0300-\u036F:_\p{L}\p{N}.\-\u00B7\u203F-\u2040]*$/u.test(
+        lexical,
+      )
+    ) {
       return null;
     }
   } else if (datatype === XSD_NS + "NCName") {
-    if (!/^[_\p{L}][\u0300-\u036F_\p{L}\p{N}.\-\u00B7\u203F-\u2040]*$/u.test(lexical)) {
+    if (
+      !/^[_\p{L}][\u0300-\u036F_\p{L}\p{N}.\-\u00B7\u203F-\u2040]*$/u.test(
+        lexical,
+      )
+    ) {
       return null;
     }
   } else if (datatype === XSD_NS + "NMTOKEN") {
-    if (!/^[\u0300-\u036F:_\p{L}\p{N}.\-\u00B7\u203F-\u2040]+$/u.test(lexical)) {
+    if (
+      !/^[\u0300-\u036F:_\p{L}\p{N}.\-\u00B7\u203F-\u2040]+$/u.test(lexical)
+    ) {
       return null;
     }
   }
-  const value = datatype === XSD_NS + "language"
-    ? lexical.toLowerCase()
-    : lexical;
+  const value =
+    datatype === XSD_NS + "language" ? lexical.toLowerCase() : lexical;
   return { family: "string", value, comparable: true };
 }
 
@@ -394,26 +411,29 @@ function floatingValue(
   lexical: string,
   datatype: string,
 ): DatatypeValue | null {
-  const special = lexical === "INF" || lexical === "+INF"
-    ? Infinity
-    : lexical === "-INF"
-    ? -Infinity
-    : lexical === "NaN"
-    ? NaN
-    : null;
+  const special =
+    lexical === "INF" || lexical === "+INF"
+      ? Infinity
+      : lexical === "-INF"
+        ? -Infinity
+        : lexical === "NaN"
+          ? NaN
+          : null;
   if (
     special === null &&
-    !/^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|\d+(?:[eE][+-]?\d+))$/
-      .test(lexical)
+    !/^[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|\d+(?:[eE][+-]?\d+))$/.test(
+      lexical,
+    )
   ) {
     return null;
   }
   const value = special ?? Number(lexical);
   if (Number.isFinite(value)) {
     const magnitude = Math.abs(value);
-    const [max, min] = datatype === XSD_FLOAT
-      ? [FLOAT_MAX, FLOAT_MIN_POSITIVE]
-      : [Number.MAX_VALUE, Number.MIN_VALUE];
+    const [max, min] =
+      datatype === XSD_FLOAT
+        ? [FLOAT_MAX, FLOAT_MIN_POSITIVE]
+        : [Number.MAX_VALUE, Number.MIN_VALUE];
     if (magnitude > 0 && (magnitude > max || magnitude < min)) return null;
   }
   return {
@@ -452,8 +472,8 @@ function binaryValue(lexical: string, datatype: string): DatatypeValue | null {
       return char === "=" ? 0 : BASE64.indexOf(char);
     });
     if (codes.some((code) => code < 0)) return null;
-    const n = (codes[0]! << 18) | (codes[1]! << 12) | (codes[2]! << 6) |
-      codes[3]!;
+    const n =
+      (codes[0]! << 18) | (codes[1]! << 12) | (codes[2]! << 6) | codes[3]!;
     bytes.push((n >> 16) & 0xff);
     if (text[index + 2] !== "=") bytes.push((n >> 8) & 0xff);
     if (text[index + 3] !== "=") bytes.push(n & 0xff);
@@ -475,7 +495,8 @@ function anyUriValue(lexical: string): DatatypeValue | null {
   }
   // A relative reference may not start with a colon-bearing path segment.
   if (
-    lexical !== "" && !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(lexical) &&
+    lexical !== "" &&
+    !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(lexical) &&
     !/^[/?#]/.test(lexical)
   ) {
     const cut = lexical.search(/[/?#]/);
@@ -493,8 +514,11 @@ function isWellFormedXmlFragment(input: string): boolean {
   while (position < source.length) {
     const open = source.indexOf("<", position);
     if (open < 0) {
-      return stack.length === 0 && isValidXmlText(source.slice(position)) &&
-        seenElement;
+      return (
+        stack.length === 0 &&
+        isValidXmlText(source.slice(position)) &&
+        seenElement
+      );
     }
     if (!isValidXmlText(source.slice(position, open))) return false;
     const skip = (start: string, end: string): boolean => {
@@ -529,7 +553,8 @@ function isWellFormedXmlFragment(input: string): boolean {
     const content = selfClosing ? raw.replace(/\/\s*$/, "").trim() : raw.trim();
     const name = /^([^\s/>]+)/.exec(content);
     if (
-      !name || !isValidXmlName(name[1]!) ||
+      !name ||
+      !isValidXmlName(name[1]!) ||
       !areValidXmlAttributes(content.slice(name[0].length))
     ) {
       return false;
@@ -561,8 +586,9 @@ function areValidXmlAttributes(source: string): boolean {
   const seen = new Set<string>();
   while (rest) {
     const match =
-      /^([A-Za-z_:\u0080-￿][A-Za-z0-9_.:\-\u0080-￿]*)\s*=\s*("[^"]*"|'[^']*')\s*/u
-        .exec(rest);
+      /^([A-Za-z_:\u0080-￿][A-Za-z0-9_.:\-\u0080-￿]*)\s*=\s*("[^"]*"|'[^']*')\s*/u.exec(
+        rest,
+      );
     if (!match || seen.has(match[1]!)) return false;
     const value = match[2]!.slice(1, -1);
     if (/</.test(value) || !isValidXmlText(value)) return false;
@@ -579,8 +605,10 @@ function isValidXmlText(value: string): boolean {
 }
 
 function isValidXmlName(name: string): boolean {
-  return /^[A-Za-z_:\u0080-￿][A-Za-z0-9_.:\-\u0080-￿]*$/u.test(name) &&
-    !/^xml$/i.test(name);
+  return (
+    /^[A-Za-z_:\u0080-￿][A-Za-z0-9_.:\-\u0080-￿]*$/u.test(name) &&
+    !/^xml$/i.test(name)
+  );
 }
 
 function isLeapYear(year: bigint): boolean {
@@ -597,7 +625,7 @@ function daysInMonth(year: bigint, month: number): number {
 function floorDiv(a: bigint, b: bigint): bigint {
   let quotient = a / b;
   const remainder = a % b;
-  if (remainder !== 0n && (remainder > 0n) !== (b > 0n)) quotient -= 1n;
+  if (remainder !== 0n && remainder > 0n !== b > 0n) quotient -= 1n;
   return quotient;
 }
 
@@ -607,14 +635,16 @@ function daysFromCivil(year: bigint, month: number, day: number): bigint {
   const yearOfEra = y - era * 400n;
   const shifted = BigInt(month + (month > 2 ? -3 : 9));
   const dayOfYear = (153n * shifted + 2n) / 5n + BigInt(day) - 1n;
-  const dayOfEra = yearOfEra * 365n + yearOfEra / 4n - yearOfEra / 100n +
-    dayOfYear;
+  const dayOfEra =
+    yearOfEra * 365n + yearOfEra / 4n - yearOfEra / 100n + dayOfYear;
   return era * 146097n + dayOfEra - 719468n;
 }
 
-function civilFromDays(
-  days: bigint,
-): { year: bigint; month: number; day: number } {
+function civilFromDays(days: bigint): {
+  year: bigint;
+  month: number;
+  day: number;
+} {
   const z = days + 719468n;
   const era = floorDiv(z, 146097n);
   const dayOfEra = z - era * 146097n;
@@ -622,8 +652,8 @@ function civilFromDays(
     (dayOfEra - dayOfEra / 1460n + dayOfEra / 36524n - dayOfEra / 146096n) /
     365n;
   let year = yearOfEra + era * 400n;
-  const dayOfYear = dayOfEra -
-    (365n * yearOfEra + yearOfEra / 4n - yearOfEra / 100n);
+  const dayOfYear =
+    dayOfEra - (365n * yearOfEra + yearOfEra / 4n - yearOfEra / 100n);
   const shifted = (5n * dayOfYear + 2n) / 153n;
   const day = dayOfYear - (153n * shifted + 2n) / 5n + 1n;
   const month = shifted < 10n ? shifted + 3n : shifted - 9n;
@@ -640,13 +670,14 @@ function localKey(
   second: number,
   fraction: string,
 ): string {
-  const yearText = year < 0n
-    ? `-${(-year).toString().padStart(4, "0")}`
-    : year.toString().padStart(4, "0");
+  const yearText =
+    year < 0n
+      ? `-${(-year).toString().padStart(4, "0")}`
+      : year.toString().padStart(4, "0");
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${yearText}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${
-    pad(second)
-  }${fraction ? `.${fraction}` : ""}`;
+  return `${yearText}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(
+    second,
+  )}${fraction ? `.${fraction}` : ""}`;
 }
 
 function dateTimeValue(
@@ -654,8 +685,9 @@ function dateTimeValue(
   datatype: string,
 ): DatatypeValue | null {
   const match =
-    /^(-?\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/
-      .exec(lexical);
+    /^(-?\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/.exec(
+      lexical,
+    );
   if (!match) return null;
   const yearDigits = match[1]!.replace(/^-/, "");
   if (yearDigits.length !== 4 && yearDigits[0] === "0") return null;
@@ -691,8 +723,8 @@ function dateTimeValue(
     }
     offsetMinutes = (zone[0] === "-" ? -1 : 1) * (hours * 60 + minutes);
   }
-  let totalSeconds = dayCount * 86400n +
-    BigInt(hour * 3600 + minute * 60 + second);
+  let totalSeconds =
+    dayCount * 86400n + BigInt(hour * 3600 + minute * 60 + second);
   if (offsetMinutes !== null) totalSeconds -= BigInt(offsetMinutes * 60);
   return {
     family: "dateTime",

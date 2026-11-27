@@ -1,10 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "unicorn",
-    "oxc"
-  ],
+  "plugins": ["typescript", "unicorn", "oxc"],
   "categories": {
     "correctness": "error"
   },
@@ -18,15 +14,10 @@
       }
     ]
   },
-  "ignorePatterns": [
-    "node_modules",
-    ".cache"
-  ],
+  "ignorePatterns": ["node_modules", ".cache"],
   "overrides": [
     {
-      "files": [
-        "pilot/bend/verify/bend_util.ts"
-      ],
+      "files": ["pilot/bend/verify/bend_util.ts"],
       "rules": {
         "typescript/no-explicit-any": "off"
       }

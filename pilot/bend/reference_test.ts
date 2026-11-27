@@ -27,7 +27,8 @@ function keys(flat: Uint32Array): Set<string> {
 /** derive returns what the six rules derive from one pair of triples. */
 function derive(a: T, b: T, transitive: Set<number>): T[] {
   const out: T[] = [];
-  const [as, ap, ao] = a, [bs, bp, bo] = b;
+  const [as, ap, ao] = a,
+    [bs, bp, bo] = b;
   if (ap === V.subClassOf && bp === V.type && bo === as) {
     out.push([bs, V.type, ao]);
   }
@@ -58,9 +59,9 @@ function bruteForce(input: Uint32Array): Set<string> {
   for (let before = -1; before !== all.length;) {
     before = all.length;
     const transitive = new Set(
-      all.filter(([, p, o]) => p === V.type && o === V.transitive).map(([s]) =>
-        s
-      ),
+      all
+        .filter(([, p, o]) => p === V.type && o === V.transitive)
+        .map(([s]) => s),
     );
     for (const a of all.slice()) {
       for (const b of all.slice()) derive(a, b, transitive).forEach(add);
@@ -124,7 +125,7 @@ function leftOut(size: number): Map<string, number> {
     t.termType === "NamedNode" ? t.value.replace(/^.*[#/]/, "") : t.termType;
   for (const q of reasoner.closure("complete")) {
     const ids = [q.subject, q.predicate, q.object].map((t) =>
-      dictionary.lookup(t)
+      dictionary.lookup(t),
     );
     if (ours.delete(ids.join(" "))) continue;
     const p = local(q.predicate);
@@ -137,14 +138,17 @@ function leftOut(size: number): Map<string, number> {
 
 /** INSTANCE are the labels that scale with the data, each from another rule. */
 const INSTANCE = {
-  "knows": "prp-symp",
+  knows: "prp-symp",
   "type string": "dt-type2",
   "type Literal": "dt-type2",
 };
 
 test("reference is a subset of Reasoner on plain, gaps attributed", () => {
   const [small, large] = [leftOut(1e3), leftOut(1e4)];
-  for (const [size, missing] of [[1e3, small], [1e4, large]] as const) {
+  for (const [size, missing] of [
+    [1e3, small],
+    [1e4, large],
+  ] as const) {
     // One literal name per person; one symmetric knows per person, less ties.
     assertEquals(missing.get("type string"), size / 5);
     assertEquals(missing.get("type Literal"), size / 5);

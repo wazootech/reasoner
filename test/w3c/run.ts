@@ -101,7 +101,8 @@ function testCases(quads: Quad[]): TestCase[] {
   const cases: TestCase[] = [];
   for (const [iri, statements] of bySubject) {
     const values = (property: string) =>
-      statements.filter((quad) => quad.predicate.value === TEST + property)
+      statements
+        .filter((quad) => quad.predicate.value === TEST + property)
         .map((quad) => quad.object.value);
     const kinds = statements
       .filter((quad) => quad.predicate.value === RDF_TYPE)
@@ -152,8 +153,10 @@ function contains(closure: Quad[], pattern: Quad[]): boolean {
       resolve(goal.object),
     ];
     if (s !== undefined && p !== undefined && o !== undefined) {
-      return (keys.has(`${s} ${p} ${o}`) || reflexive(goal, s, o)) &&
-        match(index + 1, binding);
+      return (
+        (keys.has(`${s} ${p} ${o}`) || reflexive(goal, s, o)) &&
+        match(index + 1, binding)
+      );
     }
     for (const candidate of byPredicate.get(p ?? "") ?? closure) {
       const next = new Map(binding);
@@ -181,14 +184,15 @@ function contains(closure: Quad[], pattern: Quad[]): boolean {
 }
 
 function blanks(quad: Quad): number {
-  return [quad.subject, quad.predicate, quad.object]
-    .filter((term) => term.termType === "BlankNode").length;
+  return [quad.subject, quad.predicate, quad.object].filter(
+    (term) => term.termType === "BlankNode",
+  ).length;
 }
 
 function tripleKey(quad: Quad): string {
-  return `${termKey(quad.subject)} ${termKey(quad.predicate)} ${
-    termKey(quad.object)
-  }`;
+  return `${termKey(quad.subject)} ${termKey(quad.predicate)} ${termKey(
+    quad.object,
+  )}`;
 }
 
 const RDF_FIRST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
@@ -215,10 +219,9 @@ function goal(quads: Quad[]): Quad[] {
     bySubject.set(termKey(quad.subject), list);
   }
   const object = (subject: Term, predicate: string) =>
-    bySubject.get(termKey(subject))?.find((quad) =>
-      quad.predicate.value === predicate
-    )
-      ?.object;
+    bySubject
+      .get(termKey(subject))
+      ?.find((quad) => quad.predicate.value === predicate)?.object;
   const dropped = new Set<Quad>();
   const added: Quad[] = [];
   for (const quad of quads) {
@@ -228,14 +231,14 @@ function goal(quads: Quad[]): Quad[] {
     ) {
       dropped.add(quad);
     }
-    const pairwise = quad.predicate.value === RDF_TYPE
-      ? NARY[quad.object.value]
-      : undefined;
+    const pairwise =
+      quad.predicate.value === RDF_TYPE ? NARY[quad.object.value] : undefined;
     if (pairwise === undefined) continue;
     const axiom = bySubject.get(termKey(quad.subject)) ?? [];
-    const membersQuad = axiom.find((statement) =>
-      statement.predicate.value === `${OWL}members` ||
-      statement.predicate.value === `${OWL}distinctMembers`
+    const membersQuad = axiom.find(
+      (statement) =>
+        statement.predicate.value === `${OWL}members` ||
+        statement.predicate.value === `${OWL}distinctMembers`,
     );
     if (membersQuad === undefined) continue;
     const members: Term[] = [];
@@ -250,11 +253,13 @@ function goal(quads: Quad[]): Quad[] {
     for (const statement of axiom) dropped.add(statement);
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
-        added.push(dataFactory.quad(
-          members[i] as Quad["subject"],
-          dataFactory.namedNode(pairwise),
-          members[j] as Quad["object"],
-        ));
+        added.push(
+          dataFactory.quad(
+            members[i] as Quad["subject"],
+            dataFactory.namedNode(pairwise),
+            members[j] as Quad["object"],
+          ),
+        );
       }
     }
   }
@@ -285,7 +290,8 @@ function withoutAnnotations(
   test: TestCase,
 ): Quad[] {
   if (
-    test.semantics.includes("RDF-BASED") || !test.semantics.includes("DIRECT")
+    test.semantics.includes("RDF-BASED") ||
+    !test.semantics.includes("DIRECT")
   ) {
     return conclusion;
   }
@@ -294,7 +300,8 @@ function withoutAnnotations(
     if (
       quad.predicate.value === RDF_TYPE &&
       quad.object.value === `${OWL}AnnotationProperty`
-    ) annotation.add(quad.subject.value);
+    )
+      annotation.add(quad.subject.value);
   }
   return conclusion.filter((quad) => !annotation.has(quad.predicate.value));
 }
@@ -327,7 +334,7 @@ async function withImports(quads: Quad[]): Promise<Quad[]> {
     const iri = quad.object.value;
     if (seen.has(iri)) continue;
     seen.add(iri);
-    out.push(...await parseRdfXml(await cached(iri), iri));
+    out.push(...(await parseRdfXml(await cached(iri), iri)));
   }
   return out;
 }
@@ -357,19 +364,15 @@ async function run(test: TestCase): Promise<Outcome> {
       if (parsed === undefined) {
         return { ok: false, reason: "no RDF/XML conclusion" };
       }
-      const conclusion = withoutAnnotations(
-        goal(parsed),
-        premise,
-        test,
-      );
+      const conclusion = withoutAnnotations(goal(parsed), premise, test);
       // An inconsistent premise entails everything.
       if (!inconsistent && !contains(closure, conclusion)) {
         if (explain === test.id) {
           const have = new Set(closure.map(tripleKey));
           console.log(`PREMISE:\n${test.premise}`);
           console.log(`CONCLUSION:\n${test.conclusion}`);
-          const missing = conclusion.filter((quad) =>
-            blanks(quad) === 0 && !have.has(tripleKey(quad))
+          const missing = conclusion.filter(
+            (quad) => blanks(quad) === 0 && !have.has(tripleKey(quad)),
           );
           console.log(
             `MISSING (blank-free):\n${missing.map(tripleKey).join("\n")}`,
@@ -403,9 +406,9 @@ const { values: args } = parseArgs({
 const { update, verbose, explain } = args;
 const tests = new Map<string, TestCase>();
 for (const manifest of MANIFESTS) {
-  for (
-    const test of testCases(await parseRdfXml(await cached(manifest), manifest))
-  ) {
+  for (const test of testCases(
+    await parseRdfXml(await cached(manifest), manifest),
+  )) {
     tests.set(test.id, test);
   }
 }
@@ -434,11 +437,12 @@ for (const test of tests.values()) {
     if (!expected.has(test.id)) newlyPassing.push(test.id);
     if (test.id in knownGaps) staleGaps.push(test.id);
   } else {
-    const reason = test.id in knownGaps
-      ? "known gap (see known-gaps.json)"
-      : outcome.reason.startsWith("error")
-      ? "parse or run error"
-      : outcome.reason;
+    const reason =
+      test.id in knownGaps
+        ? "known gap (see known-gaps.json)"
+        : outcome.reason.startsWith("error")
+          ? "parse or run error"
+          : outcome.reason;
     reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
     if (expected.has(test.id)) {
       regressions.push(`${test.id}: ${outcome.reason}`);
@@ -454,10 +458,7 @@ for (const [reason, count] of [...reasons].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${count} × ${reason}`);
 }
 if (update) {
-  await writeFile(
-    EXPECTED,
-    JSON.stringify(passed.sort(), null, 2) + "\n",
-  );
+  await writeFile(EXPECTED, JSON.stringify(passed.sort(), null, 2) + "\n");
   console.log(`Wrote ${passed.length} passing tests to expected-pass.json.`);
 } else {
   if (newlyPassing.length > 0) {

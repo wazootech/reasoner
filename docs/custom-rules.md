@@ -69,7 +69,7 @@ documented gaps in `known-gaps.json`); this page covers only the custom layer.
   `add()`/`run()` and crash only inside `closure()` (#35).
 - **Error messages do not locate the offending pattern.**
   `body pattern has an
-  invalid term` names neither the index nor the position
+invalid term` names neither the index nor the position
   (#36).
 
 ## Semantics notes

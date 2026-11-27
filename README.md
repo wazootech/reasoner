@@ -77,7 +77,10 @@ const reasoner = new Reasoner({
   rules: [
     {
       name: "grandparent",
-      body: [[x, parent, y], [y, parent, z]],
+      body: [
+        [x, parent, y],
+        [y, parent, z],
+      ],
       head: [[x, grandparent, z]],
     },
     {

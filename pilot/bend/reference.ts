@@ -23,9 +23,9 @@ const EMPTY: ReadonlySet<number> = new Set();
 
 function put(index: Index, p: number, a: number, b: number): boolean {
   let byA = index.get(p);
-  if (byA === undefined) index.set(p, byA = new Map());
+  if (byA === undefined) index.set(p, (byA = new Map()));
   let bs = byA.get(a);
-  if (bs === undefined) byA.set(a, bs = new Set());
+  if (bs === undefined) byA.set(a, (bs = new Set()));
   if (bs.has(b)) return false;
   bs.add(b);
   return true;
@@ -73,7 +73,8 @@ function schema(st: Store, s: number, p: number, o: number): void {
     st.pairs(s, (x, y) => st.add(y, o, x)); // prp-inv1
     st.pairs(o, (x, y) => st.add(y, s, x)); // prp-inv2
   } else if (p === V.type && o === V.transitive) {
-    st.pairs(s, (x, y) => { // prp-trp
+    st.pairs(s, (x, y) => {
+      // prp-trp
       for (const z of st.objects(s, y)) st.add(x, s, z);
     });
   }
@@ -89,7 +90,8 @@ function instance(st: Store, x: number, p: number, y: number): void {
   for (const q of st.objects(V.inverseOf, p)) st.add(y, q, x); // prp-inv1
   for (const q of st.subjects(V.inverseOf, p)) st.add(y, q, x); // prp-inv2
   if (st.subjects(V.type, V.transitive).size > 0) {
-    if (st.objects(V.type, p).has(V.transitive)) { // prp-trp
+    if (st.objects(V.type, p).has(V.transitive)) {
+      // prp-trp
       for (const z of st.objects(p, y)) st.add(x, p, z);
       for (const w of st.subjects(p, x)) st.add(w, p, y);
     }

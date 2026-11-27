@@ -24,8 +24,10 @@ export function generalizedQuad(
     object: object as Quad["object"],
     graph: graph as Quad["graph"],
     equals: (other) =>
-      other?.termType === "Quad" && subject.equals(other.subject) &&
-      predicate.equals(other.predicate) && object.equals(other.object) &&
+      other?.termType === "Quad" &&
+      subject.equals(other.subject) &&
+      predicate.equals(other.predicate) &&
+      object.equals(other.object) &&
       graph.equals(other.graph),
   };
 }

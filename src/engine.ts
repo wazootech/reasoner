@@ -382,9 +382,11 @@ export class Engine {
         for (let column = 0; column < relation.arity; column++) {
           for (const fact of relation.column(column, root)) {
             if (
-              fact.diedAt !== Infinity || fact.bornAt >= this.#clock ||
+              fact.diedAt !== Infinity ||
+              fact.bornAt >= this.#clock ||
               queued.has(fact)
-            ) continue;
+            )
+              continue;
             queued.add(fact);
             const pending = this.#delta.get(relation);
             if (pending === undefined) this.#delta.set(relation, [fact]);
@@ -404,7 +406,7 @@ export class Engine {
     if (step === plan.length) {
       for (const head of rule.head) {
         const args = head.args.map((arg) =>
-          arg >= 0 ? arg : binding[-arg - 1]!
+          arg >= 0 ? arg : binding[-arg - 1]!,
         );
         this.#store(head.relation, args);
       }
@@ -512,34 +514,40 @@ export class Engine {
         kind: "atom",
         relation,
         args: pattern.args.map((arg) =>
-          arg instanceof Variable ? -slot(arg) - 1 : this.#constant(arg)
+          arg instanceof Variable ? -slot(arg) - 1 : this.#constant(arg),
         ),
       };
     };
     const body: CompiledStep[] = rule.body.map((pattern) =>
-      pattern.kind === "atom" ? compileAtom(pattern) : {
-        kind: "builtin",
-        name: pattern.name,
-        inputs: pattern.inputs.map(slot),
-        outputs: pattern.outputs.map(slot),
-        run: pattern.run,
-      }
+      pattern.kind === "atom"
+        ? compileAtom(pattern)
+        : {
+            kind: "builtin",
+            name: pattern.name,
+            inputs: pattern.inputs.map(slot),
+            outputs: pattern.outputs.map(slot),
+            run: pattern.run,
+          },
     );
     const head = rule.head.map(compileAtom);
-    const atoms = body.filter((step): step is CompiledAtom =>
-      step.kind === "atom"
+    const atoms = body.filter(
+      (step): step is CompiledAtom => step.kind === "atom",
     );
     if (atoms.length === 0) {
       throw new Error(`Rule ${rule.name} has no body atom to seed from`);
     }
     const seeds = atoms.map((seed): Seed => {
       const constants = seed.args.flatMap((arg, column) =>
-        arg >= 0 ? [column] : []
+        arg >= 0 ? [column] : [],
       );
       return {
         atom: seed,
-        plan: plan(rule.name, seed, body.filter((step) => step !== seed)),
-        keyColumn: constants.includes(1) ? 1 : constants[0] ?? -1,
+        plan: plan(
+          rule.name,
+          seed,
+          body.filter((step) => step !== seed),
+        ),
+        keyColumn: constants.includes(1) ? 1 : (constants[0] ?? -1),
         guards: atoms.filter((atom) => atom !== seed),
       };
     });
@@ -582,16 +590,19 @@ function plan(
   const ordered: CompiledStep[] = [];
   const remaining = rest.slice();
   while (remaining.length > 0) {
-    let chosen = remaining.findIndex((step) =>
-      step.kind === "builtin" && step.inputs.every((input) => bound.has(input))
+    let chosen = remaining.findIndex(
+      (step) =>
+        step.kind === "builtin" &&
+        step.inputs.every((input) => bound.has(input)),
     );
     if (chosen === -1) {
       let best = -1;
       for (let index = 0; index < remaining.length; index++) {
         const step = remaining[index]!;
         if (step.kind !== "atom") continue;
-        const score = step.args.filter((arg) => arg >= 0 || bound.has(-arg - 1))
-          .length;
+        const score = step.args.filter(
+          (arg) => arg >= 0 || bound.has(-arg - 1),
+        ).length;
         if (score > best) {
           best = score;
           chosen = index;

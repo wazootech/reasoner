@@ -71,41 +71,46 @@ function model(bend: Bend, edges: readonly Edge[], limit: number): Result {
   throw new Error(`no fixpoint within ${limit} rounds`);
 }
 
-test("Bend scm-sco model matches the TypeScript reference on random graphs", {
-  skip: !hasBend(),
-}, async () => {
-  const bend = await load("sco.bend");
-  let grew = 0, cyclic = 0;
-  for (let seed = 1; seed <= 500; seed++) {
-    const rnd = random(seed);
-    const nodes = 2 + Math.floor(rnd() * 7);
-    const edges: Edge[] = Array.from(
-      { length: Math.floor(rnd() * 13) },
-      () =>
-        [
-          10 + Math.floor(rnd() * nodes),
-          10 + Math.floor(rnd() * nodes),
-        ] as const,
-    );
-    const input = new Set(edges.map(([a, b]) => `${a} ${b}`));
-    const got = model(bend, edges, 8);
-    assertEquals(
-      [...got.edges].sort(),
-      [...reference(edges)].sort(),
-      `seed ${seed}: ${JSON.stringify(edges)}`,
-    );
-    // dedupe: rounds add each new edge once, never a copy
-    assertEquals(
-      got.listLength,
-      edges.length + got.edges.size - input.size,
-      `seed ${seed}: the model's list holds duplicates`,
-    );
-    if (got.edges.size > input.size) grew++;
-    if ([...got.edges].some((e) => e.split(" ")[0] === e.split(" ")[1])) {
-      cyclic++;
+test(
+  "Bend scm-sco model matches the TypeScript reference on random graphs",
+  {
+    skip: !hasBend(),
+  },
+  async () => {
+    const bend = await load("sco.bend");
+    let grew = 0,
+      cyclic = 0;
+    for (let seed = 1; seed <= 500; seed++) {
+      const rnd = random(seed);
+      const nodes = 2 + Math.floor(rnd() * 7);
+      const edges: Edge[] = Array.from(
+        { length: Math.floor(rnd() * 13) },
+        () =>
+          [
+            10 + Math.floor(rnd() * nodes),
+            10 + Math.floor(rnd() * nodes),
+          ] as const,
+      );
+      const input = new Set(edges.map(([a, b]) => `${a} ${b}`));
+      const got = model(bend, edges, 8);
+      assertEquals(
+        [...got.edges].sort(),
+        [...reference(edges)].sort(),
+        `seed ${seed}: ${JSON.stringify(edges)}`,
+      );
+      // dedupe: rounds add each new edge once, never a copy
+      assertEquals(
+        got.listLength,
+        edges.length + got.edges.size - input.size,
+        `seed ${seed}: the model's list holds duplicates`,
+      );
+      if (got.edges.size > input.size) grew++;
+      if ([...got.edges].some((e) => e.split(" ")[0] === e.split(" ")[1])) {
+        cyclic++;
+      }
     }
-  }
-  console.log(`compared 500 graphs (${grew} grew, ${cyclic} with a cycle)`);
-  assert(grew >= 200, `closing added edges in only ${grew} graphs: too easy`);
-  assert(cyclic >= 50, `only ${cyclic} graphs had a cycle`);
-});
+    console.log(`compared 500 graphs (${grew} grew, ${cyclic} with a cycle)`);
+    assert(grew >= 200, `closing added edges in only ${grew} graphs: too easy`);
+    assert(cyclic >= 50, `only ${cyclic} graphs had a cycle`);
+  },
+);

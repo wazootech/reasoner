@@ -7,14 +7,8 @@
     ".": "./src/mod.ts"
   },
   "publish": {
-    "include": [
-      "src/",
-      "README.md",
-      "LICENSE"
-    ],
-    "exclude": [
-      "src/**/*.test.ts"
-    ]
+    "include": ["src/", "README.md", "LICENSE"],
+    "exclude": ["src/**/*.test.ts"]
   },
   "imports": {
     "@/": "./src/",
