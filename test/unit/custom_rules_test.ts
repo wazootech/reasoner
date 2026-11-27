@@ -1,4 +1,5 @@
-import { assert, assertEquals, assertFalse, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertFalse, assertThrows } from "../asserts.ts";
+import { test } from "node:test";
 import { dataFactory as df } from "@wazoo/sparql-engine/term";
 import type { Quad } from "@rdfjs/types";
 import { type CustomRule, Reasoner, variables } from "@/mod.ts";
@@ -12,17 +13,19 @@ const { x, y, z } = variables();
 
 const grandparent: CustomRule = {
   name: "grandparent",
-  body: [[x!, ex("parent"), y!], [y!, ex("parent"), z!]],
+  body: [
+    [x!, ex("parent"), y!],
+    [y!, ex("parent"), z!],
+  ],
   head: [[x!, ex("grandparent"), z!]],
 };
 
 const keys = (quads: Iterable<Quad>) =>
-  [...quads].map((q) =>
-    `${q.subject.value} ${q.predicate.value} ${q.object.value}`
-  )
+  [...quads]
+    .map((q) => `${q.subject.value} ${q.predicate.value} ${q.object.value}`)
     .sort();
 
-Deno.test("custom rule derives triples from the constructor option", () => {
+test("custom rule derives triples from the constructor option", () => {
   const r = new Reasoner({ rules: [grandparent] });
   r.add([triple("a", "parent", "b"), triple("b", "parent", "c")]);
   r.run();
@@ -30,13 +33,16 @@ Deno.test("custom rule derives triples from the constructor option", () => {
   assertFalse(r.has(ex("a"), ex("grandparent"), ex("b")));
 });
 
-Deno.test("custom rule chains with OWL 2 RL rules in one fixpoint", () => {
+test("custom rule chains with OWL 2 RL rules in one fixpoint", () => {
   const r = new Reasoner({
-    rules: [grandparent, {
-      name: "ancestor-of-grand",
-      body: [[x!, ex("grandparent"), y!]],
-      head: [[x!, ex("kin"), y!]],
-    }],
+    rules: [
+      grandparent,
+      {
+        name: "ancestor-of-grand",
+        body: [[x!, ex("grandparent"), y!]],
+        head: [[x!, ex("kin"), y!]],
+      },
+    ],
   });
   r.add([
     triple("parent", "sub", "parent2"),
@@ -50,7 +56,7 @@ Deno.test("custom rule chains with OWL 2 RL rules in one fixpoint", () => {
   assert(r.has(ex("a"), ex("kin"), ex("c")));
 });
 
-Deno.test("addRule applies to triples already added and run", () => {
+test("addRule applies to triples already added and run", () => {
   const r = new Reasoner();
   r.add([triple("a", "parent", "b"), triple("b", "parent", "c")]);
   r.run();
@@ -60,21 +66,18 @@ Deno.test("addRule applies to triples already added and run", () => {
   assertEquals(r.rules.length, 1);
 });
 
-Deno.test("extend reports what custom rules newly derive", () => {
+test("extend reports what custom rules newly derive", () => {
   const r = new Reasoner({ rules: [grandparent] });
   r.add([triple("a", "parent", "b")]);
   r.run();
   const added = r.extend([triple("b", "parent", "c")]);
   assertEquals(
     keys(added),
-    keys([
-      triple("b", "parent", "c"),
-      triple("a", "grandparent", "c"),
-    ]),
+    keys([triple("b", "parent", "c"), triple("a", "grandparent", "c")]),
   );
 });
 
-Deno.test("retract with a custom rule equals a fresh run", () => {
+test("retract with a custom rule equals a fresh run", () => {
   const base = [triple("a", "parent", "b"), triple("b", "parent", "c")];
   const r = new Reasoner({ rules: [grandparent] });
   r.add([...base, triple("c", "parent", "d")]);
@@ -82,10 +85,7 @@ Deno.test("retract with a custom rule equals a fresh run", () => {
   const removed = r.retract([triple("c", "parent", "d")]);
   assertEquals(
     keys(removed),
-    keys([
-      triple("c", "parent", "d"),
-      triple("b", "grandparent", "d"),
-    ]),
+    keys([triple("c", "parent", "d"), triple("b", "grandparent", "d")]),
   );
   const fresh = new Reasoner({ rules: [grandparent] });
   fresh.add(base);
@@ -93,13 +93,15 @@ Deno.test("retract with a custom rule equals a fresh run", () => {
   assertEquals(keys(r.closure()), keys(fresh.closure()));
 });
 
-Deno.test("an inconsistent head reports the rule name and terms", () => {
+test("an inconsistent head reports the rule name and terms", () => {
   const r = new Reasoner({
-    rules: [{
-      name: "no-self-parent",
-      body: [[x!, ex("parent"), x!]],
-      inconsistent: [x!],
-    }],
+    rules: [
+      {
+        name: "no-self-parent",
+        body: [[x!, ex("parent"), x!]],
+        inconsistent: [x!],
+      },
+    ],
   });
   r.add([triple("a", "parent", "a")]);
   r.run();
@@ -109,13 +111,15 @@ Deno.test("an inconsistent head reports the rule name and terms", () => {
   assertEquals(found[0]!.terms, [ex("a")]);
 });
 
-Deno.test("derived triples follow the closure view filters", () => {
+test("derived triples follow the closure view filters", () => {
   const r = new Reasoner({
-    rules: [{
-      name: "label-as-subject",
-      body: [[x!, ex("name"), y!]],
-      head: [[y!, ex("namedBy"), x!]],
-    }],
+    rules: [
+      {
+        name: "label-as-subject",
+        body: [[x!, ex("name"), y!]],
+        head: [[y!, ex("namedBy"), x!]],
+      },
+    ],
   });
   r.add([df.quad(ex("a"), ex("name"), df.literal("A"))]);
   r.run();
@@ -125,7 +129,7 @@ Deno.test("derived triples follow the closure view filters", () => {
   assertFalse([...r.closure("application")].some(literalSubject));
 });
 
-Deno.test("custom rules coexist with sameAs merging", () => {
+test("custom rules coexist with sameAs merging", () => {
   const r = new Reasoner({ rules: [grandparent] });
   r.add([
     triple("a", "parent", "b"),
@@ -139,7 +143,7 @@ Deno.test("custom rules coexist with sameAs merging", () => {
   assertFalse(r.has(ex("a"), ex("grandparent"), ex("c")));
 });
 
-Deno.test("invalid rules are rejected with a clear error", () => {
+test("invalid rules are rejected with a clear error", () => {
   const r = new Reasoner();
   assertThrows(
     () =>
@@ -191,12 +195,15 @@ Deno.test("invalid rules are rejected with a clear error", () => {
   assertEquals(r.rules.length, 1);
 });
 
-Deno.test("extend sees a rule constant that is merged into another term", () => {
+test("extend sees a rule constant that is merged into another term", () => {
   // The rule names p1 and p2 as constants. Merging them makes the old fact
   // (a p1 b) match both atoms without being renamed, so extend must re-seed it.
   const clash: CustomRule = {
     name: "clash",
-    body: [[x!, ex("p1"), y!], [x!, ex("p2"), y!]],
+    body: [
+      [x!, ex("p1"), y!],
+      [x!, ex("p2"), y!],
+    ],
     inconsistent: [x!, y!],
   };
   const sameAs = (a: string, b: string) =>
@@ -213,7 +220,7 @@ Deno.test("extend sees a rule constant that is merged into another term", () => 
   }
 });
 
-Deno.test("custom rules join across graphs and apply per graph", () => {
+test("custom rules join across graphs and apply per graph", () => {
   const g1 = ex("g1");
   const g2 = ex("g2");
   const r = new Reasoner({ rules: [grandparent] });

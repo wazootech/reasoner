@@ -92,7 +92,7 @@ const RDFS_NAMES = ["subClassOf", "domain", "range", "subPropertyOf"];
 export function prng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
-    a = (a + 0x6D2B79F5) >>> 0;
+    a = (a + 0x6d2b79f5) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -182,7 +182,7 @@ export function generate(seed: number): T3[] {
     else if (r < 0.64) {
       const o = rnd() < 0.3 ? pick(LITERALS) : ind();
       t = [ind(), "sameAs", o];
-    } else if (r < 0.70) {
+    } else if (r < 0.7) {
       t = [ind(), "differentFrom", ind()];
     } else if (r < 0.77) t = [pick(CLASSES), "subClassOf", pick(CLASSES)];
     else if (r < 0.83) t = [pick(PROPS), "domain", pick(CLASSES)];
@@ -198,30 +198,40 @@ const { x, y, z } = variables();
 const customRules = (): CustomRule[] => [
   {
     name: "custom-join",
-    body: [[x!, term("p0"), y!], [y!, term("p1"), z!]],
+    body: [
+      [x!, term("p0"), y!],
+      [y!, term("p1"), z!],
+    ],
     head: [[x!, term("p3"), z!]],
   },
   {
     name: "custom-type",
-    body: [[x!, term("a"), term("C0")], [x!, term("p0"), y!]],
+    body: [
+      [x!, term("a"), term("C0")],
+      [x!, term("p0"), y!],
+    ],
     head: [[y!, term("a"), term("C1")]],
   },
   {
     name: "custom-same",
-    body: [[x!, term("p3"), y!], [y!, term("p3"), x!]],
+    body: [
+      [x!, term("p3"), y!],
+      [y!, term("p3"), x!],
+    ],
     head: [[x!, term("sameAs"), y!]],
   },
   {
     name: "custom-clash",
-    body: [[x!, term("p1"), y!], [x!, term("p2"), y!]],
+    body: [
+      [x!, term("p1"), y!],
+      [x!, term("p2"), y!],
+    ],
     inconsistent: [x!, y!],
   },
 ];
 
 function reasonerFor(mode: Mode): Reasoner {
-  return new Reasoner(
-    mode.endsWith("-custom") ? { rules: customRules() } : {},
-  );
+  return new Reasoner(mode.endsWith("-custom") ? { rules: customRules() } : {});
 }
 
 function term(s: string) {
@@ -375,9 +385,9 @@ function graphOutcome(r: Reasoner): Outcome {
     closure.add(had ? k : `!has ${k}`);
   }
   const inconsistencies = new Set(
-    r.inconsistencies().map((i) =>
-      `${nameOf(i.graph as Quad["graph"])}|${i.rule}`
-    ),
+    r
+      .inconsistencies()
+      .map((i) => `${nameOf(i.graph as Quad["graph"])}|${i.rule}`),
   );
   return { closure, inconsistencies };
 }
@@ -394,7 +404,10 @@ const plainCache = new Map<string, Plain>();
  * block. Runs repeat across a seed's oracle calls, so they are memoized.
  */
 function plainRun(ts: readonly T3[]): Plain {
-  const id = ts.map((t) => t.join(" ")).sort().join("|");
+  const id = ts
+    .map((t) => t.join(" "))
+    .sort()
+    .join("|");
   let plain = plainCache.get(id);
   if (plain === undefined) {
     const r = new Reasoner();
@@ -483,7 +496,7 @@ function graphDiff(
   /** want is the oracle: plain runs for union, the labelled oracle otherwise. */
   const want = (gqs: readonly GQ[]): Outcome =>
     union ? plainOutcome(gqs.map(([t]) => t)) : oracle(gqs);
-  const listed = (q: Quad) => union ? key(q) : gkey(q);
+  const listed = (q: Quad) => (union ? key(q) : gkey(q));
   const everything = [...baseQ, ...deltaQ];
   let expected: Outcome;
   let reportedQuads: Quad[];
@@ -498,9 +511,10 @@ function graphDiff(
     r.add(everything.map(gquad));
     r.run();
     // The partial mode retracts one copy of each triple; the rest stay.
-    const gone = kind === "retract"
-      ? deltaQ
-      : deltaQ.filter(([t, g]) => g === deltaQ.find(([u]) => u === t)![1]);
+    const gone =
+      kind === "retract"
+        ? deltaQ
+        : deltaQ.filter(([t, g]) => g === deltaQ.find(([u]) => u === t)![1]);
     reportedQuads = r.retract(gone.map(gquad), "complete");
     const goneIds = new Set(gone.map(([t, g]) => `${g}|${t.join(" ")}`));
     expected = want(
@@ -626,7 +640,9 @@ export function classify(d: Diff): string {
       ? `extra-inconsistency[${rules(d.extraInconsistencies)}]`
       : "",
     d.wrongRemoved.length ? `wrong-removed[${preds(d.wrongRemoved)}]` : "",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
@@ -678,7 +694,7 @@ export interface Failure {
 /** runSeed splits the seed's graph at a seeded random point and compares. */
 export function runSeed(seed: number, mode: Mode = "extend"): Failure | null {
   const triples = generate(seed);
-  const rnd = prng(seed ^ 0x9E3779B9);
+  const rnd = prng(seed ^ 0x9e3779b9);
   const cut = 1 + Math.floor(rnd() * (triples.length - 1));
   let base = triples.slice(0, cut);
   let delta = triples.slice(cut);

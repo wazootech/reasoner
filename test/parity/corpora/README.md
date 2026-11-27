@@ -1,7 +1,7 @@
 # Parity corpora
 
 Asserted graphs (before inference), dumped to N-Triples the way the Wiki CLI
-loads them. `deno task test:parity` runs every `.nt` file here.
+loads them. `bun run test:parity` runs every `.nt` file here.
 
 | File            | Source                                                                    |
 | --------------- | ------------------------------------------------------------------------- |
@@ -12,4 +12,4 @@ loads them. `deno task test:parity` runs every `.nt` file here.
 | `bench-1e3.nt`  | The `bench:shacl` fixture at 10³ quads (wazootech/wiki#416)               |
 
 The private `memory` corpus and the 10⁴ bench fixture are checked locally by
-passing their paths: `deno task test:parity path/to/memory.nt`.
+passing their paths: `bun run test:parity path/to/memory.nt`.

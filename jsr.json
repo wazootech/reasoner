@@ -1,0 +1,21 @@
+{
+  "name": "@wazoo/reasoner",
+  "description": "OWL 2 RL materialization over RDF/JS terms: semi-naive, indexed, with owl:sameAs as a union-find and incremental additions.",
+  "version": "0.4.2",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/mod.ts"
+  },
+  "publish": {
+    "include": ["src/", "README.md", "LICENSE"],
+    "exclude": ["src/**/*.test.ts"]
+  },
+  "imports": {
+    "@/": "./src/",
+    "@rdfjs/types": "npm:@rdfjs/types@^2.0.1",
+    "@wazoo/sparql-engine": "jsr:@wazoo/sparql-engine@^0.5.1"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

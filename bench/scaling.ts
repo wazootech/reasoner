@@ -2,7 +2,7 @@
  * Scaling benchmark: closure time and memory for seeded synthetic graphs of
  * growing size, with and without `owl:sameAs` producers.
  *
- *     deno task bench [--sizes 1e3,1e4,1e5,1e6]
+ *     bun run bench [--sizes 1e3,1e4,1e5,1e6]
  *                     [--profile plain|equality|sameas|delete|fpliteral] [--check]
  *
  * With `--check` the run fails when a time is over its limit in
@@ -21,7 +21,9 @@
  * The graph is thousands of two- and three-person components, so a retraction
  * has to recompute only the few it touches.
  */
-import { parseArgs } from "@std/cli/parse-args";
+import { readFileSync } from "node:fs";
+import process from "node:process";
+import { parseArgs } from "node:util";
 import type { Quad } from "@rdfjs/types";
 import { dataFactory } from "@wazoo/sparql-engine/term";
 import { Reasoner } from "@/mod.ts";
@@ -134,13 +136,13 @@ export function generate(size: number, profile: Profile): Quad[] {
 
 function peakRssMb(): number | undefined {
   try {
-    const status = Deno.readTextFileSync("/proc/self/status");
+    const status = readFileSync("/proc/self/status", "utf8");
     const match = /VmHWM:\s+(\d+) kB/.exec(status);
     if (match) return Math.round(Number(match[1]) / 1024);
   } catch {
     // Not Linux; fall back to the current RSS.
   }
-  return Math.round(Deno.memoryUsage().rss / 1024 / 1024);
+  return Math.round(process.memoryUsage().rss / 1024 / 1024);
 }
 
 interface Thresholds {
@@ -151,15 +153,18 @@ interface Thresholds {
 }
 
 if (import.meta.main) {
-  const args = parseArgs(Deno.args, {
-    string: ["sizes", "profile"],
-    boolean: ["check"],
-    default: { sizes: "1e3,1e4,1e5", profile: "plain" },
+  const { values: args } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      sizes: { type: "string", default: "1e3,1e4,1e5" },
+      profile: { type: "string", default: "plain" },
+      check: { type: "boolean", default: false },
+    },
   });
   const sizes = args.sizes.split(",").map(Number);
   const profile = args.profile as Profile;
   const thresholds: Thresholds = JSON.parse(
-    Deno.readTextFileSync(new URL("./thresholds.json", import.meta.url)),
+    readFileSync(new URL("./thresholds.json", import.meta.url), "utf8"),
   );
   const failures: string[] = [];
   let previous: { size: number; ms: number } | undefined;
@@ -194,9 +199,9 @@ if (import.meta.main) {
       console.log(
         `| ${quads.length} | delete | built ${(built / 1000).toFixed(2)} s | ` +
           `retract ${gone.length} triples: ${(ms / 1000).toFixed(2)} s, ` +
-          `${removed} removed | fresh run on the rest: ${
-            (freshMs / 1000).toFixed(2)
-          } s | |`,
+          `${removed} removed | fresh run on the rest: ${(
+            freshMs / 1000
+          ).toFixed(2)} s | |`,
       );
       const limit = thresholds.profiles[profile]?.[String(size)];
       if (limit !== undefined && ms > limit) {
@@ -206,9 +211,9 @@ if (import.meta.main) {
     }
     console.log(
       `| ${quads.length} | ${profile} | ${closure} | ${stats.merges} | ${stats.rounds} | ` +
-        `${(ms / 1000).toFixed(2)} s | ${
-          (ms / (quads.length / 1000)).toFixed(1)
-        } | ` +
+        `${(ms / 1000).toFixed(2)} s | ${(ms / (quads.length / 1000)).toFixed(
+          1,
+        )} | ` +
         `${peakRssMb()} MB |`,
     );
     const limit = thresholds.profiles[profile]?.[String(size)];
@@ -217,19 +222,21 @@ if (import.meta.main) {
     }
     // Ignore sub-100 ms baselines: the ratio of two tiny times is noise.
     if (
-      previous !== undefined && size === previous.size * 2 &&
-      previous.ms >= 100 && ms / previous.ms > thresholds.maxDoublingRatio
+      previous !== undefined &&
+      size === previous.size * 2 &&
+      previous.ms >= 100 &&
+      ms / previous.ms > thresholds.maxDoublingRatio
     ) {
       failures.push(
-        `${profile} ${previous.size} -> ${size}: x${
-          (ms / previous.ms).toFixed(1)
-        } per doubling > x${thresholds.maxDoublingRatio}`,
+        `${profile} ${previous.size} -> ${size}: x${(ms / previous.ms).toFixed(
+          1,
+        )} per doubling > x${thresholds.maxDoublingRatio}`,
       );
     }
     previous = { size, ms };
   }
   if (failures.length > 0) {
     console.error(`\nBenchmark regressions:\n  ${failures.join("\n  ")}`);
-    if (args.check) Deno.exit(1);
+    if (args.check) process.exit(1);
   }
 }

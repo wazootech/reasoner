@@ -36,9 +36,9 @@ const isSkolem = isSkolemTerm;
  * the graph the triple is asserted in (the default graph when absent); see
  * {@link GraphMode}.
  */
-export type Triple =
-  & Pick<Quad, "subject" | "predicate" | "object">
-  & { readonly graph?: Term };
+export type Triple = Pick<Quad, "subject" | "predicate" | "object"> & {
+  readonly graph?: Term;
+};
 
 /**
  * ClosureView chooses which entailed triples a closure lists.
@@ -70,8 +70,10 @@ const HUB_NAMESPACES = [RDF_NS, RDFS_NS, OWL_NS, XSD_NS];
  * that only share `rdf:type` do not derive anything from each other.
  */
 function isHub(term: Term): boolean {
-  return term.termType === "NamedNode" &&
-    HUB_NAMESPACES.some((namespace) => term.value.startsWith(namespace));
+  return (
+    term.termType === "NamedNode" &&
+    HUB_NAMESPACES.some((namespace) => term.value.startsWith(namespace))
+  );
 }
 
 /** INSTANCE_VOCABULARY are the vocabulary predicates that relate instances. */
@@ -251,10 +253,7 @@ class Core {
    * the closure that are new: the added triples themselves when they were not
    * already entailed, and everything they entail.
    */
-  extend(
-    triples: Iterable<Triple>,
-    view: ClosureView = "complete",
-  ): Quad[] {
+  extend(triples: Iterable<Triple>, view: ClosureView = "complete"): Quad[] {
     if (!this.#ran) this.run();
     const since = this.#engine.tick();
     this.add(triples);
@@ -276,13 +275,16 @@ class Core {
     const added: Quad[] = [];
     for (const fact of facts) {
       for (const [s, p, o] of this.#expand(fact)) {
-        const before = this.#triples.get(factKey([
-          equality.findAt(s, since),
-          equality.findAt(p, since),
-          equality.findAt(o, since),
-        ]));
+        const before = this.#triples.get(
+          factKey([
+            equality.findAt(s, since),
+            equality.findAt(p, since),
+            equality.findAt(o, since),
+          ]),
+        );
         if (
-          before !== undefined && before.bornAt < since &&
+          before !== undefined &&
+          before.bornAt < since &&
           before.diedAt >= since
         ) {
           continue;
@@ -466,7 +468,7 @@ class Core {
         queue.push(terms.term(skolem));
       }
     }
-    for (const id of [...ids]) {
+    for (const id of Array.from(ids)) {
       for (const member of equality.members(equality.find(id))) ids.add(member);
     }
     for (const id of ids) if (isHub(terms.term(id))) return undefined;
@@ -519,7 +521,7 @@ class Core {
       }
     }
     return [...before.values()].filter((quad) =>
-      shown(quad.subject, quad.predicate, quad.object, view)
+      shown(quad.subject, quad.predicate, quad.object, view),
     );
   }
 
@@ -536,7 +538,7 @@ class Core {
       old.delete(tripleKey(quad.subject, quad.predicate, quad.object));
     }
     return [...old.values()].filter((quad) =>
-      shown(quad.subject, quad.predicate, quad.object, view)
+      shown(quad.subject, quad.predicate, quad.object, view),
     );
   }
 
@@ -611,12 +613,7 @@ class Core {
     }
   }
 
-  #quad(
-    s: number,
-    p: number,
-    o: number,
-    view: ClosureView,
-  ): Quad | undefined {
+  #quad(s: number, p: number, o: number, view: ClosureView): Quad | undefined {
     const terms = this.#engine.terms;
     const predicate = terms.term(p);
     const subject = terms.term(s);
@@ -931,7 +928,7 @@ export class Reasoner {
       }
       per.set(key, { core, keys });
     }
-    return this.#per = per;
+    return (this.#per = per);
   }
 
   #graphTerm(key: string): Term {
@@ -994,7 +991,8 @@ export class Reasoner {
       if (
         !without.has(key) &&
         shown(quad.subject, quad.predicate, quad.object, view)
-      ) out.push(quad);
+      )
+        out.push(quad);
     }
     return out;
   }

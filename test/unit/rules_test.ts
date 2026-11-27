@@ -2,7 +2,8 @@
 // property, class, class axiom, schema and datatype rules). A case either
 // lists triples the closure must contain or names the rule an inconsistency
 // must report. The engine's own helper rules are exercised through these.
-import { assert, assertFalse } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertFalse } from "../asserts.ts";
 import { parseTurtleQuads } from "@wazoo/sparql-engine/parser";
 import { dataFactory } from "@wazoo/sparql-engine/term";
 import { generalizedQuad } from "@/generalized-quad.ts";
@@ -53,13 +54,11 @@ const CASES: Record<string, Case> = {
     inconsistent: "eq-diff1",
   },
   "eq-diff2": {
-    premise:
-      `[] a owl:AllDifferent ; owl:members (ex:a ex:b) . ex:a owl:sameAs ex:b .`,
+    premise: `[] a owl:AllDifferent ; owl:members (ex:a ex:b) . ex:a owl:sameAs ex:b .`,
     inconsistent: "eq-diff2",
   },
   "eq-diff3": {
-    premise:
-      `[] a owl:AllDifferent ; owl:distinctMembers (ex:a ex:b) . ex:a owl:sameAs ex:b .`,
+    premise: `[] a owl:AllDifferent ; owl:distinctMembers (ex:a ex:b) . ex:a owl:sameAs ex:b .`,
     inconsistent: "eq-diff3",
   },
   // Properties
@@ -76,8 +75,7 @@ const CASES: Record<string, Case> = {
     entails: `ex:y1 owl:sameAs ex:y2 .`,
   },
   "prp-ifp": {
-    premise:
-      `ex:p a owl:InverseFunctionalProperty . ex:x1 ex:p ex:y . ex:x2 ex:p ex:y .`,
+    premise: `ex:p a owl:InverseFunctionalProperty . ex:x1 ex:p ex:y . ex:x2 ex:p ex:y .`,
     entails: `ex:x1 owl:sameAs ex:x2 .`,
   },
   "prp-irp": {
@@ -89,13 +87,11 @@ const CASES: Record<string, Case> = {
     entails: `ex:y ex:p ex:x .`,
   },
   "prp-asyp": {
-    premise:
-      `ex:p a owl:AsymmetricProperty . ex:x ex:p ex:y . ex:y ex:p ex:x .`,
+    premise: `ex:p a owl:AsymmetricProperty . ex:x ex:p ex:y . ex:y ex:p ex:x .`,
     inconsistent: "prp-asyp",
   },
   "prp-trp": {
-    premise:
-      `ex:p a owl:TransitiveProperty . ex:x ex:p ex:y . ex:y ex:p ex:z .`,
+    premise: `ex:p a owl:TransitiveProperty . ex:x ex:p ex:y . ex:y ex:p ex:z .`,
     entails: `ex:x ex:p ex:z .`,
   },
   "prp-spo1": {
@@ -103,8 +99,7 @@ const CASES: Record<string, Case> = {
     entails: `ex:x ex:p2 ex:y .`,
   },
   "prp-spo2": {
-    premise:
-      `ex:p owl:propertyChainAxiom (ex:p1 ex:p2) . ex:x ex:p1 ex:y . ex:y ex:p2 ex:z .`,
+    premise: `ex:p owl:propertyChainAxiom (ex:p1 ex:p2) . ex:x ex:p1 ex:y . ex:y ex:p2 ex:z .`,
     entails: `ex:x ex:p ex:z .`,
   },
   "prp-eqp1": {
@@ -116,13 +111,11 @@ const CASES: Record<string, Case> = {
     entails: `ex:x ex:p1 ex:y .`,
   },
   "prp-pdw": {
-    premise:
-      `ex:p1 owl:propertyDisjointWith ex:p2 . ex:x ex:p1 ex:y . ex:x ex:p2 ex:y .`,
+    premise: `ex:p1 owl:propertyDisjointWith ex:p2 . ex:x ex:p1 ex:y . ex:x ex:p2 ex:y .`,
     inconsistent: "prp-pdw",
   },
   "prp-adp": {
-    premise:
-      `[] a owl:AllDisjointProperties ; owl:members (ex:p1 ex:p2) . ex:x ex:p1 ex:y . ex:x ex:p2 ex:y .`,
+    premise: `[] a owl:AllDisjointProperties ; owl:members (ex:p1 ex:p2) . ex:x ex:p1 ex:y . ex:x ex:p2 ex:y .`,
     inconsistent: "prp-adp",
   },
   "prp-inv1": {
@@ -134,18 +127,15 @@ const CASES: Record<string, Case> = {
     entails: `ex:y ex:p1 ex:x .`,
   },
   "prp-key": {
-    premise:
-      `ex:C owl:hasKey (ex:k) . ex:x a ex:C ; ex:k ex:v . ex:y a ex:C ; ex:k ex:v .`,
+    premise: `ex:C owl:hasKey (ex:k) . ex:x a ex:C ; ex:k ex:v . ex:y a ex:C ; ex:k ex:v .`,
     entails: `ex:x owl:sameAs ex:y .`,
   },
   "prp-npa1": {
-    premise:
-      `[] a owl:NegativePropertyAssertion ; owl:sourceIndividual ex:i1 ; owl:assertionProperty ex:p ; owl:targetIndividual ex:i2 . ex:i1 ex:p ex:i2 .`,
+    premise: `[] a owl:NegativePropertyAssertion ; owl:sourceIndividual ex:i1 ; owl:assertionProperty ex:p ; owl:targetIndividual ex:i2 . ex:i1 ex:p ex:i2 .`,
     inconsistent: "prp-npa1",
   },
   "prp-npa2": {
-    premise:
-      `[] a owl:NegativePropertyAssertion ; owl:sourceIndividual ex:i ; owl:assertionProperty ex:p ; owl:targetValue "v" . ex:i ex:p "v" .`,
+    premise: `[] a owl:NegativePropertyAssertion ; owl:sourceIndividual ex:i ; owl:assertionProperty ex:p ; owl:targetValue "v" . ex:i ex:p "v" .`,
     inconsistent: "prp-npa2",
   },
   // Classes
@@ -178,18 +168,15 @@ const CASES: Record<string, Case> = {
     inconsistent: "cls-com",
   },
   "cls-svf1": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:someValuesFrom ex:C . ex:u ex:p ex:v . ex:v a ex:C .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:someValuesFrom ex:C . ex:u ex:p ex:v . ex:v a ex:C .`,
     entails: `ex:u a ex:R .`,
   },
   "cls-svf2": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:someValuesFrom owl:Thing . ex:u ex:p ex:v .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:someValuesFrom owl:Thing . ex:u ex:p ex:v .`,
     entails: `ex:u a ex:R .`,
   },
   "cls-avf": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:allValuesFrom ex:C . ex:u a ex:R ; ex:p ex:v .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:allValuesFrom ex:C . ex:u a ex:R ; ex:p ex:v .`,
     entails: `ex:v a ex:C .`,
   },
   "cls-hv1": {
@@ -201,33 +188,27 @@ const CASES: Record<string, Case> = {
     entails: `ex:u a ex:R .`,
   },
   "cls-maxc1": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:maxCardinality ${ZERO} . ex:u a ex:R ; ex:p ex:y .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:maxCardinality ${ZERO} . ex:u a ex:R ; ex:p ex:y .`,
     inconsistent: "cls-maxc1",
   },
   "cls-maxc2": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:maxCardinality ${ONE} . ex:u a ex:R ; ex:p ex:y1, ex:y2 .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:maxCardinality ${ONE} . ex:u a ex:R ; ex:p ex:y1, ex:y2 .`,
     entails: `ex:y1 owl:sameAs ex:y2 .`,
   },
   "cls-maxqc1": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ZERO} ; owl:onClass ex:C . ex:u a ex:R ; ex:p ex:y . ex:y a ex:C .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ZERO} ; owl:onClass ex:C . ex:u a ex:R ; ex:p ex:y . ex:y a ex:C .`,
     inconsistent: "cls-maxqc1",
   },
   "cls-maxqc2": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ZERO} ; owl:onClass owl:Thing . ex:u a ex:R ; ex:p ex:y .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ZERO} ; owl:onClass owl:Thing . ex:u a ex:R ; ex:p ex:y .`,
     inconsistent: "cls-maxqc2",
   },
   "cls-maxqc3": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ONE} ; owl:onClass ex:C . ex:u a ex:R ; ex:p ex:y1, ex:y2 . ex:y1 a ex:C . ex:y2 a ex:C .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ONE} ; owl:onClass ex:C . ex:u a ex:R ; ex:p ex:y1, ex:y2 . ex:y1 a ex:C . ex:y2 a ex:C .`,
     entails: `ex:y1 owl:sameAs ex:y2 .`,
   },
   "cls-maxqc4": {
-    premise:
-      `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ONE} ; owl:onClass owl:Thing . ex:u a ex:R ; ex:p ex:y1, ex:y2 .`,
+    premise: `ex:R owl:onProperty ex:p ; owl:maxQualifiedCardinality ${ONE} ; owl:onClass owl:Thing . ex:u a ex:R ; ex:p ex:y1, ex:y2 .`,
     entails: `ex:y1 owl:sameAs ex:y2 .`,
   },
   "cls-oo": {
@@ -252,15 +233,13 @@ const CASES: Record<string, Case> = {
     inconsistent: "cax-dw",
   },
   "cax-adc": {
-    premise:
-      `[] a owl:AllDisjointClasses ; owl:members (ex:C1 ex:C2) . ex:x a ex:C1, ex:C2 .`,
+    premise: `[] a owl:AllDisjointClasses ; owl:members (ex:C1 ex:C2) . ex:x a ex:C1, ex:C2 .`,
     inconsistent: "cax-adc",
   },
   // Schema vocabulary
   "scm-cls": {
     premise: `ex:C a owl:Class .`,
-    entails:
-      `ex:C rdfs:subClassOf ex:C, owl:Thing . ex:C owl:equivalentClass ex:C . owl:Nothing rdfs:subClassOf ex:C .`,
+    entails: `ex:C rdfs:subClassOf ex:C, owl:Thing . ex:C owl:equivalentClass ex:C . owl:Nothing rdfs:subClassOf ex:C .`,
   },
   "scm-sco": {
     premise: `ex:C1 rdfs:subClassOf ex:C2 . ex:C2 rdfs:subClassOf ex:C3 .`,
@@ -276,27 +255,22 @@ const CASES: Record<string, Case> = {
   },
   "scm-op": {
     premise: `ex:p a owl:ObjectProperty .`,
-    entails:
-      `ex:p rdfs:subPropertyOf ex:p . ex:p owl:equivalentProperty ex:p .`,
+    entails: `ex:p rdfs:subPropertyOf ex:p . ex:p owl:equivalentProperty ex:p .`,
   },
   "scm-dp": {
     premise: `ex:p a owl:DatatypeProperty .`,
-    entails:
-      `ex:p rdfs:subPropertyOf ex:p . ex:p owl:equivalentProperty ex:p .`,
+    entails: `ex:p rdfs:subPropertyOf ex:p . ex:p owl:equivalentProperty ex:p .`,
   },
   "scm-spo": {
-    premise:
-      `ex:p1 rdfs:subPropertyOf ex:p2 . ex:p2 rdfs:subPropertyOf ex:p3 .`,
+    premise: `ex:p1 rdfs:subPropertyOf ex:p2 . ex:p2 rdfs:subPropertyOf ex:p3 .`,
     entails: `ex:p1 rdfs:subPropertyOf ex:p3 .`,
   },
   "scm-eqp1": {
     premise: `ex:p1 owl:equivalentProperty ex:p2 .`,
-    entails:
-      `ex:p1 rdfs:subPropertyOf ex:p2 . ex:p2 rdfs:subPropertyOf ex:p1 .`,
+    entails: `ex:p1 rdfs:subPropertyOf ex:p2 . ex:p2 rdfs:subPropertyOf ex:p1 .`,
   },
   "scm-eqp2": {
-    premise:
-      `ex:p1 rdfs:subPropertyOf ex:p2 . ex:p2 rdfs:subPropertyOf ex:p1 .`,
+    premise: `ex:p1 rdfs:subPropertyOf ex:p2 . ex:p2 rdfs:subPropertyOf ex:p1 .`,
     entails: `ex:p1 owl:equivalentProperty ex:p2 .`,
   },
   "scm-dom1": {
@@ -316,28 +290,23 @@ const CASES: Record<string, Case> = {
     entails: `ex:p1 rdfs:range ex:C .`,
   },
   "scm-hv": {
-    premise:
-      `ex:R1 owl:onProperty ex:p1 ; owl:hasValue ex:i . ex:R2 owl:onProperty ex:p2 ; owl:hasValue ex:i . ex:p1 rdfs:subPropertyOf ex:p2 .`,
+    premise: `ex:R1 owl:onProperty ex:p1 ; owl:hasValue ex:i . ex:R2 owl:onProperty ex:p2 ; owl:hasValue ex:i . ex:p1 rdfs:subPropertyOf ex:p2 .`,
     entails: `ex:R1 rdfs:subClassOf ex:R2 .`,
   },
   "scm-svf1": {
-    premise:
-      `ex:R1 owl:onProperty ex:p ; owl:someValuesFrom ex:C1 . ex:R2 owl:onProperty ex:p ; owl:someValuesFrom ex:C2 . ex:C1 rdfs:subClassOf ex:C2 .`,
+    premise: `ex:R1 owl:onProperty ex:p ; owl:someValuesFrom ex:C1 . ex:R2 owl:onProperty ex:p ; owl:someValuesFrom ex:C2 . ex:C1 rdfs:subClassOf ex:C2 .`,
     entails: `ex:R1 rdfs:subClassOf ex:R2 .`,
   },
   "scm-svf2": {
-    premise:
-      `ex:R1 owl:onProperty ex:p1 ; owl:someValuesFrom ex:C . ex:R2 owl:onProperty ex:p2 ; owl:someValuesFrom ex:C . ex:p1 rdfs:subPropertyOf ex:p2 .`,
+    premise: `ex:R1 owl:onProperty ex:p1 ; owl:someValuesFrom ex:C . ex:R2 owl:onProperty ex:p2 ; owl:someValuesFrom ex:C . ex:p1 rdfs:subPropertyOf ex:p2 .`,
     entails: `ex:R1 rdfs:subClassOf ex:R2 .`,
   },
   "scm-avf1": {
-    premise:
-      `ex:R1 owl:onProperty ex:p ; owl:allValuesFrom ex:C1 . ex:R2 owl:onProperty ex:p ; owl:allValuesFrom ex:C2 . ex:C1 rdfs:subClassOf ex:C2 .`,
+    premise: `ex:R1 owl:onProperty ex:p ; owl:allValuesFrom ex:C1 . ex:R2 owl:onProperty ex:p ; owl:allValuesFrom ex:C2 . ex:C1 rdfs:subClassOf ex:C2 .`,
     entails: `ex:R1 rdfs:subClassOf ex:R2 .`,
   },
   "scm-avf2": {
-    premise:
-      `ex:R1 owl:onProperty ex:p1 ; owl:allValuesFrom ex:C . ex:R2 owl:onProperty ex:p2 ; owl:allValuesFrom ex:C . ex:p1 rdfs:subPropertyOf ex:p2 .`,
+    premise: `ex:R1 owl:onProperty ex:p1 ; owl:allValuesFrom ex:C . ex:R2 owl:onProperty ex:p2 ; owl:allValuesFrom ex:C . ex:p1 rdfs:subPropertyOf ex:p2 .`,
     entails: `ex:R2 rdfs:subClassOf ex:R1 .`,
   },
   "scm-int": {
@@ -358,7 +327,7 @@ function closureOf(premise: string): Reasoner {
 }
 
 for (const [rule, c] of Object.entries(CASES)) {
-  Deno.test(`rule ${rule}`, () => {
+  test(`rule ${rule}`, () => {
     const reasoner = closureOf(c.premise);
     if (c.entails !== undefined) {
       for (const q of parseTurtleQuads(PREFIXES + c.entails)) {
@@ -371,9 +340,9 @@ for (const [rule, c] of Object.entries(CASES)) {
     if (c.inconsistent !== undefined) {
       assert(
         reasoner.inconsistencies().some((i) => i.rule === c.inconsistent),
-        `${rule}: no ${c.inconsistent} among ${
-          JSON.stringify(reasoner.inconsistencies().map((i) => i.rule))
-        }`,
+        `${rule}: no ${c.inconsistent} among ${JSON.stringify(
+          reasoner.inconsistencies().map((i) => i.rule),
+        )}`,
       );
     }
   });
@@ -387,7 +356,7 @@ const named = (iri: string) => dataFactory.namedNode(iri);
 const RDF_TYPE = named("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
 const OWL = "http://www.w3.org/2002/07/owl#";
 
-Deno.test("rule dt-type1: the supported datatypes are datatypes", () => {
+test("rule dt-type1: the supported datatypes are datatypes", () => {
   const reasoner = closureOf(`ex:a ex:p ex:b .`);
   assert(
     reasoner.has(
@@ -398,13 +367,13 @@ Deno.test("rule dt-type1: the supported datatypes are datatypes", () => {
   );
 });
 
-Deno.test("rule dt-type2: a literal is a member of its datatype", () => {
+test("rule dt-type2: a literal is a member of its datatype", () => {
   const reasoner = closureOf(`ex:a ex:p "1"^^xsd:integer .`);
   assert(reasoner.has(lit("1", "integer"), RDF_TYPE, named(XSD + "integer")));
   assert(reasoner.has(lit("1", "integer"), RDF_TYPE, named(XSD + "decimal")));
 });
 
-Deno.test("rule eq-ref is not materialized, as documented in rules.ts", () => {
+test("rule eq-ref is not materialized, as documented in rules.ts", () => {
   const reasoner = closureOf(`ex:a ex:p ex:b .`);
   assertFalse(
     reasoner.has(
@@ -419,15 +388,17 @@ const SAME_AS = named(OWL + "sameAs");
 const EX_B = named("https://reasoner.example/b");
 const EX_P = named("https://reasoner.example/p");
 
-Deno.test("rule dt-eq: equal decimal-space values of different spellings are one class", () => {
+test("rule dt-eq: equal decimal-space values of different spellings are one class", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .
 ex:c ex:p "01"^^xsd:int . ex:d ex:p "+1.00"^^xsd:decimal .`,
   );
   const one = lit("1", "integer");
-  for (
-    const [v, d] of [["1.0", "decimal"], ["01", "int"], ["+1.00", "decimal"]]
-  ) {
+  for (const [v, d] of [
+    ["1.0", "decimal"],
+    ["01", "int"],
+    ["+1.00", "decimal"],
+  ]) {
     assert(reasoner.has(one, SAME_AS, lit(v!, d!)), v);
   }
   // eq-rep-o: the subjects now hold every equal spelling.
@@ -437,7 +408,7 @@ ex:c ex:p "01"^^xsd:int . ex:d ex:p "+1.00"^^xsd:decimal .`,
   assert(reasoner.has(lit("1.0", "decimal"), RDF_TYPE, named(XSD + "integer")));
 });
 
-Deno.test("rule dt-eq: booleans true and 1 are the same value", () => {
+test("rule dt-eq: booleans true and 1 are the same value", () => {
   const reasoner = closureOf(
     `ex:a ex:p "true"^^xsd:boolean . ex:b ex:p "1"^^xsd:boolean .
 ex:c ex:p "false"^^xsd:boolean . ex:d ex:p "0"^^xsd:boolean .`,
@@ -449,7 +420,7 @@ ex:c ex:p "false"^^xsd:boolean . ex:d ex:p "0"^^xsd:boolean .`,
   );
 });
 
-Deno.test("rule dt-eq: different values, other datatypes, ill-typed and NaN stay apart", () => {
+test("rule dt-eq: different values, other datatypes, ill-typed and NaN stay apart", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:a ex:p "2"^^xsd:integer .
 ex:a ex:p "1" . ex:a ex:p "01" . ex:a ex:p "1"^^xsd:boolean .
@@ -481,7 +452,7 @@ ex:a ex:p "0"^^xsd:double . ex:a ex:p "-0"^^xsd:double . ex:a ex:p "1.1"^^xsd:de
   );
 });
 
-Deno.test("rule dt-eq: floats equal floats and doubles equal doubles, never across spaces", () => {
+test("rule dt-eq: floats equal floats and doubles equal doubles, never across spaces", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1.1"^^xsd:double , "1.10"^^xsd:double , "1.1"^^xsd:float , "1.1"^^xsd:decimal .
 ex:b ex:p "1E21"^^xsd:double , "1000000000000000000000"^^xsd:double , "1000000000000000000000"^^xsd:integer .
@@ -511,28 +482,31 @@ ex:c ex:p "0"^^xsd:float , "+0.0"^^xsd:float , "INF"^^xsd:float , "+INF"^^xsd:fl
   assertFalse(reasoner.has(lit("0", "float"), SAME_AS, lit("INF", "float")));
 });
 
-Deno.test("rule dt-eq: a functional property with equal-valued spellings is consistent", () => {
+test("rule dt-eq: a functional property with equal-valued spellings is consistent", () => {
   const reasoner = closureOf(
     `ex:p a owl:FunctionalProperty . ex:a ex:p "1"^^xsd:integer , "1.0"^^xsd:decimal .`,
   );
   assertFalse(reasoner.inconsistencies().length > 0);
 });
 
-Deno.test("rule dt-eq: owl:differentFrom between equal values is inconsistent", () => {
+test("rule dt-eq: owl:differentFrom between equal values is inconsistent", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:b ex:p "1.0"^^xsd:decimal .`,
   );
-  reasoner.extend([
-    generalizedQuad(
-      lit("1", "integer"),
-      named(OWL + "differentFrom"),
-      lit("1.0", "decimal"),
-    ),
-  ], "application");
+  reasoner.extend(
+    [
+      generalizedQuad(
+        lit("1", "integer"),
+        named(OWL + "differentFrom"),
+        lit("1.0", "decimal"),
+      ),
+    ],
+    "application",
+  );
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
 
-Deno.test("rule dt-eq: hasKey merges individuals whose keys are equal values", () => {
+test("rule dt-eq: hasKey merges individuals whose keys are equal values", () => {
   const reasoner = closureOf(
     `ex:C owl:hasKey (ex:id) .
 ex:a a ex:C ; ex:id "1"^^xsd:integer . ex:b a ex:C ; ex:id "1.0"^^xsd:decimal .
@@ -554,7 +528,7 @@ ex:c a ex:C ; ex:id "2"^^xsd:integer .`,
   );
 });
 
-Deno.test("rule dt-eq: a value met later joins its class (extend and retract)", () => {
+test("rule dt-eq: a value met later joins its class (extend and retract)", () => {
   const reasoner = closureOf(`ex:a ex:p "1"^^xsd:integer .`);
   const parse = (turtle: string) => parseTurtleQuads(PREFIXES + turtle);
   assertFalse(
@@ -569,7 +543,7 @@ Deno.test("rule dt-eq: a value met later joins its class (extend and retract)", 
   );
 });
 
-Deno.test("rule dt-diff: different values are different", () => {
+test("rule dt-diff: different values are different", () => {
   const reasoner = closureOf(
     `ex:a ex:p "1"^^xsd:integer . ex:a ex:p "2"^^xsd:integer .
 ex:p a owl:FunctionalProperty .`,
@@ -584,16 +558,18 @@ ex:p a owl:FunctionalProperty .`,
   assert(reasoner.inconsistencies().some((i) => i.rule === "eq-diff1"));
 });
 
-Deno.test("rule dt-not-type: an ill-typed literal is inconsistent", () => {
+test("rule dt-not-type: an ill-typed literal is inconsistent", () => {
   const reasoner = closureOf(`ex:a ex:p "x"^^xsd:integer .`);
   assert(reasoner.inconsistencies().some((i) => i.rule === "dt-not-type"));
 });
 
-Deno.test("rule prp-trp-chain: a transitive property is its own (p p) chain", () => {
+test("rule prp-trp-chain: a transitive property is its own (p p) chain", () => {
   const r = closureOf(`ex:p a owl:TransitiveProperty .`);
   const has = (view: "complete" | "application") =>
-    [...r.closure(view)].filter((q) =>
-      q.predicate.value === "http://www.w3.org/2002/07/owl#propertyChainAxiom"
+    [...r.closure(view)].filter(
+      (q) =>
+        q.predicate.value ===
+        "http://www.w3.org/2002/07/owl#propertyChainAxiom",
     ).length;
   assert(has("complete") === 1);
   // The skolem list is bookkeeping: the application view does not list it.

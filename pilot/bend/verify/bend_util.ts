@@ -2,35 +2,34 @@
  * Helpers for the oracle tests (reasoner#45): compile a `.bend` file in this
  * directory with `bend -o` and import the resulting ES module.
  */
-import { assert } from "@std/assert";
+import { spawnSync } from "node:child_process";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import process from "node:process";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { assert } from "../../../test/asserts.ts";
 
-// deno-lint-ignore no-explicit-any -- the generated module is untyped
+// `any` is allowed in this file only (.oxlintrc.json): the generated module
+// is untyped.
 export type Bend = any;
 
 /** hasBend reports whether the `bend` binary is on the PATH. */
 export function hasBend(): boolean {
-  try {
-    return new Deno.Command("bend", {
-      args: ["--help"],
-      stdout: "null",
-      stderr: "null",
-    }).outputSync().success;
-  } catch {
-    return false;
-  }
+  return spawnSync("bend", ["--help"], { stdio: "ignore" }).status === 0;
 }
 
 /** load compiles `file` (relative to this directory) and imports its defs. */
 export async function load(file: string): Promise<Bend> {
-  const dir = await Deno.makeTempDir();
-  const out = `${dir}/model.mjs`;
-  const src = new URL(`./${file}`, import.meta.url).pathname;
-  const run = await new Deno.Command("bend", {
-    args: [src, "-o", out],
-    env: { BEND_NO_TELEMETRY: "1" },
-  }).output();
-  assert(run.success, new TextDecoder().decode(run.stderr));
-  return (await import(`file://${out}`)).default;
+  const dir = await mkdtemp(join(tmpdir(), "bend-"));
+  const out = join(dir, "model.mjs");
+  const src = fileURLToPath(new URL(`./${file}`, import.meta.url));
+  const run = spawnSync("bend", [src, "-o", out], {
+    encoding: "utf8",
+    env: { ...process.env, BEND_NO_TELEMETRY: "1" },
+  });
+  assert(run.status === 0, run.stderr);
+  return (await import(pathToFileURL(out).href)).default;
 }
 
 /** random returns a deterministic generator (mulberry32). */

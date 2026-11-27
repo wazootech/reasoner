@@ -1,0 +1,3 @@
+# Not formatted by bun fmt: lockfiles and caches.
+bun.lock
+.cache/

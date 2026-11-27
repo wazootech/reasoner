@@ -9,10 +9,10 @@
  * subClassOf edges. It compiles `sco.bend` with `bend -o`, so it needs `bend`
  * on the PATH and is skipped without it.
  *
- *     deno test --allow-read --allow-write --allow-run --allow-env \
- *       pilot/bend/verify/oracle_test.ts
+ *     bun test pilot/bend/verify/oracle_test.ts
  */
-import { assert, assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assert, assertEquals } from "../../../test/asserts.ts";
 import { V } from "../encode.ts";
 import { type Bend, hasBend, load, random } from "./bend_util.ts";
 import { closure } from "../reference.ts";
@@ -71,12 +71,15 @@ function model(bend: Bend, edges: readonly Edge[], limit: number): Result {
   throw new Error(`no fixpoint within ${limit} rounds`);
 }
 
-Deno.test({
-  name: "Bend scm-sco model matches the TypeScript reference on random graphs",
-  ignore: !hasBend(),
-  fn: async () => {
+test(
+  "Bend scm-sco model matches the TypeScript reference on random graphs",
+  {
+    skip: !hasBend(),
+  },
+  async () => {
     const bend = await load("sco.bend");
-    let grew = 0, cyclic = 0;
+    let grew = 0,
+      cyclic = 0;
     for (let seed = 1; seed <= 500; seed++) {
       const rnd = random(seed);
       const nodes = 2 + Math.floor(rnd() * 7);
@@ -110,4 +113,4 @@ Deno.test({
     assert(grew >= 200, `closing added edges in only ${grew} graphs: too easy`);
     assert(cyclic >= 50, `only ${cyclic} graphs had a cycle`);
   },
-});
+);

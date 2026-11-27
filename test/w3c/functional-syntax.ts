@@ -70,11 +70,7 @@ export function functionalSyntaxToQuads(text: string): Quad[] {
   };
   const add = (s: Term, p: string, o: Term) =>
     quads.push(
-      df.quad(
-        s as Quad["subject"],
-        df.namedNode(p),
-        o as Quad["object"],
-      ),
+      df.quad(s as Quad["subject"], df.namedNode(p), o as Quad["object"]),
     );
   const atom = (node: Node): string => {
     if (typeof node !== "string") {
@@ -125,8 +121,8 @@ export function functionalSyntaxToQuads(text: string): Quad[] {
     FunctionalObjectProperty: "FunctionalProperty",
     TransitiveObjectProperty: "TransitiveProperty",
   };
-  const ontology = parse(tokenize(body)).find((n) =>
-    typeof n !== "string" && n.name === "Ontology"
+  const ontology = parse(tokenize(body)).find(
+    (n) => typeof n !== "string" && n.name === "Ontology",
   );
   if (ontology === undefined || typeof ontology === "string") {
     throw new Error("no Ontology(...) in functional syntax");

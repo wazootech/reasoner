@@ -12,8 +12,11 @@
  * Every difference must be one of the {@link DIVERGENCES}; anything else
  * fails the run.
  *
- *     deno task test:parity [file.nt ...]
+ *     bun run test:parity [file.nt ...]
  */
+import { readdirSync, readFileSync } from "node:fs";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import type { Quad, Term } from "@rdfjs/types";
@@ -75,10 +78,10 @@ const require = createRequire(import.meta.url);
 const ENGINE_ROOT = dirname(
   dirname(dirname(require.resolve("rdfjs-inference-engine"))),
 );
-const RULES = Deno.readTextFileSync(
+const RULES = readFileSync(
   join(ENGINE_ROOT, "rules/owl2rl/owl2rl-eyeling.n3"),
-)
-  .replaceAll("\r\n", "\n");
+  "utf8",
+).replaceAll("\r\n", "\n");
 
 const DT_EQ_RULE = `{ ?n1 internal:term ?lt1 .
   ?n2 internal:term ?lt2 .
@@ -102,9 +105,8 @@ function withoutRule(rules: string, rule: string): string {
 }
 
 const FULL_RULES = withoutRule(RULES, DT_EQ_RULE);
-const RULES_WITHOUT_EQUALITY = FULL_RULES.replace(
-  RULE_PATTERN,
-  (rule) => (rule.split("=>")[0] ?? "").includes("owl:sameAs") ? "" : rule,
+const RULES_WITHOUT_EQUALITY = FULL_RULES.replace(RULE_PATTERN, (rule) =>
+  (rule.split("=>")[0] ?? "").includes("owl:sameAs") ? "" : rule,
 );
 
 const SAME_AS_SOURCES = new Set(
@@ -124,8 +126,9 @@ function isOntologyTriple(quad: Quad): boolean {
   const predicate = quad.predicate.value;
   if (predicate === `${RDF}type`) {
     const type = quad.object.value;
-    return type.startsWith(OWL) || type.startsWith(RDFS) ||
-      type === `${RDF}Property`;
+    return (
+      type.startsWith(OWL) || type.startsWith(RDFS) || type === `${RDF}Property`
+    );
   }
   if (predicate === `${RDF}first` || predicate === `${RDF}rest`) return true;
   if (predicate.startsWith(RDFS)) {
@@ -134,8 +137,7 @@ function isOntologyTriple(quad: Quad): boolean {
       `${RDFS}comment`,
       `${RDFS}seeAlso`,
       `${RDFS}isDefinedBy`,
-    ]
-      .includes(predicate);
+    ].includes(predicate);
   }
   if (predicate.startsWith(OWL)) {
     return predicate !== `${OWL}sameAs` && predicate !== `${OWL}differentFrom`;
@@ -144,28 +146,35 @@ function isOntologyTriple(quad: Quad): boolean {
 }
 
 function referenceClosure(asserted: Quad[]): Quad[] {
-  const mayDeriveSameAs = asserted.some((quad) =>
-    SAME_AS_SOURCES.has(quad.subject.value) ||
-    SAME_AS_SOURCES.has(quad.predicate.value) ||
-    SAME_AS_SOURCES.has(quad.object.value)
+  const mayDeriveSameAs = asserted.some(
+    (quad) =>
+      SAME_AS_SOURCES.has(quad.subject.value) ||
+      SAME_AS_SOURCES.has(quad.predicate.value) ||
+      SAME_AS_SOURCES.has(quad.object.value),
   );
   const engine = new InferenceEngine();
   engine.load(
-    [{
-      n3: mayDeriveSameAs ? FULL_RULES : RULES_WITHOUT_EQUALITY,
-      label: "rules/owl2rl",
-    }],
+    [
+      {
+        n3: mayDeriveSameAs ? FULL_RULES : RULES_WITHOUT_EQUALITY,
+        label: "rules/owl2rl",
+      },
+    ],
     asserted.filter(isOntologyTriple),
     { selectRuntimeRules: false },
   );
   const internal = (term: Term) =>
     ENGINE_NAMESPACES.some((namespace) => term.value.startsWith(namespace));
-  return [...asserted, ...engine.getStaticClosure(), ...engine.infer(asserted)]
-    .filter(
-      (quad: Quad) =>
-        !internal(quad.subject) && !internal(quad.predicate) &&
-        !internal(quad.object),
-    );
+  return [
+    ...asserted,
+    ...engine.getStaticClosure(),
+    ...engine.infer(asserted),
+  ].filter(
+    (quad: Quad) =>
+      !internal(quad.subject) &&
+      !internal(quad.predicate) &&
+      !internal(quad.object),
+  );
 }
 
 /**
@@ -179,7 +188,8 @@ function normalize(closure: Iterable<Quad>): Closure {
     if (quad.predicate.value !== `${OWL}complementOf`) continue;
     const skolem = quad.subject.value;
     if (
-      skolem.startsWith(EYELING_SKOLEM) || skolem.startsWith(COMPLEMENT_PREFIX)
+      skolem.startsWith(EYELING_SKOLEM) ||
+      skolem.startsWith(COMPLEMENT_PREFIX)
     ) {
       complements.set(skolem, `complement(${termKey(quad.object)})`);
     }
@@ -198,7 +208,10 @@ function normalize(closure: Iterable<Quad>): Closure {
     ];
     keyed.set(`${s} ${p} ${o}`, quad);
     if (quad.predicate.value === `${OWL}sameAs`) {
-      for (const [a, b] of [[s, o], [o, s]]) {
+      for (const [a, b] of [
+        [s, o],
+        [o, s],
+      ]) {
         const set = same.get(a!) ?? new Set([a!]);
         set.add(b!);
         same.set(a!, set);
@@ -235,8 +248,8 @@ function compare(name: string, asserted: Quad[]): boolean {
     key: string,
     quad: Quad,
   ) => {
-    const divergence = DIVERGENCES.find((entry) =>
-      entry.side === side && entry.matches(quad, reference)
+    const divergence = DIVERGENCES.find(
+      (entry) => entry.side === side && entry.matches(quad, reference),
     );
     if (divergence) {
       counts.set(divergence.name, (counts.get(divergence.name) ?? 0) + 1);
@@ -251,9 +264,9 @@ function compare(name: string, asserted: Quad[]): boolean {
 
   console.log(
     `${name}: asserted ${asserted.length}, reference ${reference.size} ` +
-      `(${referenceMs.toFixed(0)} ms), reasoner ${ours.size} (${
-        oursMs.toFixed(0)
-      } ms)`,
+      `(${referenceMs.toFixed(0)} ms), reasoner ${ours.size} (${oursMs.toFixed(
+        0,
+      )} ms)`,
   );
   for (const [divergence, count] of counts) {
     console.log(`  ~ ${count} × ${divergence}`);
@@ -266,20 +279,20 @@ function compare(name: string, asserted: Quad[]): boolean {
 }
 
 const DEFAULT_DIR = new URL("./corpora/", import.meta.url);
-const files = Deno.args.length > 0
-  ? Deno.args
-  : [...Deno.readDirSync(DEFAULT_DIR)]
-    .filter((entry) => entry.name.endsWith(".nt"))
-    .map((entry) =>
-      new URL(entry.name, DEFAULT_DIR).pathname.replace(/^\/([A-Za-z]:)/, "$1")
-    )
-    .sort();
+const argv = process.argv.slice(2);
+const files =
+  argv.length > 0
+    ? argv
+    : readdirSync(DEFAULT_DIR)
+        .filter((name) => name.endsWith(".nt"))
+        .map((name) => fileURLToPath(new URL(name, DEFAULT_DIR)))
+        .sort();
 
 let ok = true;
 for (const file of files) {
   const name = file.split(/[\\/]/).pop()!.replace(/\.nt$/, "");
-  const asserted = parseTurtleQuads(Deno.readTextFileSync(file)).map((quad) =>
-    dataFactory.quad(quad.subject, quad.predicate, quad.object)
+  const asserted = parseTurtleQuads(readFileSync(file, "utf8")).map((quad) =>
+    dataFactory.quad(quad.subject, quad.predicate, quad.object),
   );
   ok = compare(name, asserted) && ok;
 }
@@ -287,5 +300,5 @@ if (!ok) {
   console.error(
     "Parity failed: differences outside the documented divergences.",
   );
-  Deno.exit(1);
+  process.exit(1);
 }

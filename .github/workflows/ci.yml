@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          deno-version: v2.9.8
-      - run: deno install --frozen
-      - run: deno task ci
-      - run: deno task publish:dry
+          bun-version: "1.x"
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run ci
+      - run: bun run publish:dry
   # Triple-for-triple parity with the Wiki's current engine
   # (rdfjs-inference-engine) on the committed public corpora. Every
   # difference must be one of the divergences test/parity/parity.ts documents.
@@ -24,11 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          deno-version: v2.9.8
-      - run: deno install --frozen
-      - run: deno task test:parity
+          bun-version: "1.x"
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run test:parity
   # W3C OWL 2 RL conformance. The manifests are fetched from w3.org (not
   # vendored) and cached; a test listed in test/w3c/expected-pass.json that
   # fails is a regression.
@@ -36,15 +36,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          deno-version: v2.9.8
-      - run: deno install --frozen
+          bun-version: "1.x"
+      - run: bun install --frozen-lockfile --ignore-scripts
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/owl2rl
           key: owl2rl-manifests-${{ hashFiles('test/w3c/run.ts') }}
-      - run: deno task test:w3c
+      - run: bun run test:w3c
   # Closure time on the sameAs-heavy repro of #5 and the equality profile must
   # stay under the limits in bench/thresholds.json, and must not grow by more
   # than maxDoublingRatio per doubling of the size.
@@ -52,11 +52,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          deno-version: v2.9.8
-      - run: deno install --frozen
-      - run: deno task bench:check
+          bun-version: "1.x"
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run bench:check
   # Differential oracle: Reasoner.extend/retract against a fresh run on random
   # graphs. A new failure class fails the job. The nightly workflow runs more
   # seeds.
@@ -64,8 +64,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          deno-version: v2.9.8
-      - run: deno install --frozen
-      - run: deno task test:differential --seeds 1000
+          bun-version: "1.x"
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run test:differential --seeds 1000

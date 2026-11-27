@@ -59,11 +59,14 @@ export interface RuleOptions {
 const RESERVED = new Set(OWL2RL_RULES.map((rule) => rule.name));
 
 function isArgument(value: unknown): value is RuleArgument {
-  return value instanceof Variable ||
-    (typeof value === "object" && value !== null &&
+  return (
+    value instanceof Variable ||
+    (typeof value === "object" &&
+      value !== null &&
       typeof (value as Term).termType === "string" &&
       (value as Term).termType !== "Quad" &&
-      (value as Term).termType !== "DefaultGraph");
+      (value as Term).termType !== "DefaultGraph")
+  );
 }
 
 /**
@@ -113,7 +116,8 @@ export function compileCustomRule(
     pattern.forEach(needBound);
     const predicate = pattern[1];
     if (
-      !(predicate instanceof Variable) && predicate.termType !== "NamedNode"
+      !(predicate instanceof Variable) &&
+      predicate.termType !== "NamedNode"
     ) {
       fail("a constant head predicate must be a named node");
     }
@@ -131,9 +135,7 @@ export function compileCustomRule(
   if (inconsistent !== undefined) {
     const padded = [...inconsistent];
     while (padded.length < 5) padded.push(NONE);
-    heads.push(
-      atom(INCONSISTENCY, dataFactory.literal(rule.name), ...padded),
-    );
+    heads.push(atom(INCONSISTENCY, dataFactory.literal(rule.name), ...padded));
   }
   return {
     name: rule.name,

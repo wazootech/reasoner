@@ -1,6 +1,6 @@
 name: Publish
 
-# Releases @wazoo/reasoner to JSR when a merge to main carries a deno.json
+# Releases @wazoo/reasoner to JSR when a merge to main carries a jsr.json
 # version that JSR does not have yet. Routine merges (version unchanged) skip
 # cleanly. Publishing uses GitHub OIDC, so the JSR package must be linked to
 # this repository (jsr.io/@wazoo/reasoner/settings → GitHub repository).
@@ -17,56 +17,32 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          deno-version: v2.9.8
-      - run: deno install --frozen
-      - run: deno task ci
-      - run: deno task test:parity
-      - run: deno task publish:dry
+          bun-version: "1.x"
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run ci
+      - run: bun run test:parity
+      - run: bun run publish:dry
       - name: Check whether this merge is a release
         id: release-check
         run: |
-          version=$(deno eval 'console.log(JSON.parse(await Deno.readTextFile("deno.json")).version)')
+          version=$(jq -r .version jsr.json)
           # A 404 means the package has never been published: any version is new.
           status=$(curl -s -o /tmp/jsr-meta.json -w "%{http_code}" https://jsr.io/@wazoo/reasoner/meta.json)
           if [ "$status" = "404" ]; then
-            latest="none"
+            published=false
           elif [ "$status" = "200" ]; then
-            latest=$(deno eval 'console.log(JSON.parse(await Deno.readTextFile("/tmp/jsr-meta.json")).latest ?? "none")')
+            published=$(jq --arg v "$version" '.versions | has($v)' /tmp/jsr-meta.json)
           else
             echo "::error::jsr.io returned HTTP $status for the package metadata."
             exit 1
           fi
-          echo "local version: $version / published latest: $latest"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "published=$latest" >> "$GITHUB_OUTPUT"
-          if [ "$version" = "$latest" ]; then
-            echo "match=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "match=false" >> "$GITHUB_OUTPUT"
-          fi
+          echo "local version: $version / already published: $published"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
       - name: Publish to JSR
-        if: steps.release-check.outputs.match == 'false'
-        run: |
-          # Capture the output without losing a failure: under bash -e, a
-          # failing command substitution would abort before the echo.
-          set +e
-          output=$(deno publish 2>&1)
-          status=$?
-          set -e
-          echo "$output"
-          if [ "$status" -ne 0 ]; then
-            echo "::error::deno publish failed with exit $status (full output above)."
-            exit 1
-          fi
-          # deno publish exits 0 when the version is already on JSR, which
-          # would make a stale version a silent no-op.
-          if echo "$output" | grep -q "already published"; then
-            echo "::error::deno publish skipped although local version ${{ steps.release-check.outputs.version }} differs from published ${{ steps.release-check.outputs.published }}."
-            exit 1
-          fi
+        if: steps.release-check.outputs.published == 'false'
+        run: bunx jsr publish
       - name: No release needed
-        if: steps.release-check.outputs.match == 'true'
-        run: |
-          echo "::notice::Version ${{ steps.release-check.outputs.version }} is already on JSR; nothing to release."
+        if: steps.release-check.outputs.published == 'true'
+        run: echo "::notice::This version is already on JSR; nothing to release."

@@ -4,9 +4,10 @@
  * the full Reasoner's closure on the `plain` bench profile, with every triple
  * the reference leaves out attributed to a rule outside its six.
  *
- *     deno test --allow-read pilot/bend/reference_test.ts
+ *     bun test pilot/bend/reference_test.ts
  */
-import { assertEquals } from "@std/assert";
+import { test } from "node:test";
+import { assertEquals } from "../../test/asserts.ts";
 import { Reasoner } from "@/mod.ts";
 import { generate } from "../../bench/scaling.ts";
 import { encode, V } from "./encode.ts";
@@ -26,7 +27,8 @@ function keys(flat: Uint32Array): Set<string> {
 /** derive returns what the six rules derive from one pair of triples. */
 function derive(a: T, b: T, transitive: Set<number>): T[] {
   const out: T[] = [];
-  const [as, ap, ao] = a, [bs, bp, bo] = b;
+  const [as, ap, ao] = a,
+    [bs, bp, bo] = b;
   if (ap === V.subClassOf && bp === V.type && bo === as) {
     out.push([bs, V.type, ao]);
   }
@@ -57,9 +59,9 @@ function bruteForce(input: Uint32Array): Set<string> {
   for (let before = -1; before !== all.length;) {
     before = all.length;
     const transitive = new Set(
-      all.filter(([, p, o]) => p === V.type && o === V.transitive).map(([s]) =>
-        s
-      ),
+      all
+        .filter(([, p, o]) => p === V.type && o === V.transitive)
+        .map(([s]) => s),
     );
     for (const a of all.slice()) {
       for (const b of all.slice()) derive(a, b, transitive).forEach(add);
@@ -81,7 +83,7 @@ function randomGraph(seed: number): Uint32Array {
   return new Uint32Array(out);
 }
 
-Deno.test("reference equals brute force on 500 random graphs", () => {
+test("reference equals brute force on 500 random graphs", () => {
   for (let seed = 1; seed <= 500; seed++) {
     const input = randomGraph(seed);
     assertEquals(
@@ -92,10 +94,10 @@ Deno.test("reference equals brute force on 500 random graphs", () => {
   }
 });
 
-Deno.test({
-  name: "Bend model equals brute force on 40 random graphs",
-  ignore: !hasBend(),
-  fn: async () => {
+test(
+  "Bend model equals brute force on 40 random graphs",
+  { skip: !hasBend() },
+  async () => {
     // The Bend model's laws are proved in verify/RL_PROOF.bend; this ties the
     // proved model to the independent brute force, not just to `closure`.
     const bend = await load("rl.bend");
@@ -108,7 +110,7 @@ Deno.test({
       );
     }
   },
-});
+);
 
 /** leftOut counts, by predicate (and class for rdf:type), what Reasoner adds. */
 function leftOut(size: number): Map<string, number> {
@@ -123,7 +125,7 @@ function leftOut(size: number): Map<string, number> {
     t.termType === "NamedNode" ? t.value.replace(/^.*[#/]/, "") : t.termType;
   for (const q of reasoner.closure("complete")) {
     const ids = [q.subject, q.predicate, q.object].map((t) =>
-      dictionary.lookup(t)
+      dictionary.lookup(t),
     );
     if (ours.delete(ids.join(" "))) continue;
     const p = local(q.predicate);
@@ -136,14 +138,17 @@ function leftOut(size: number): Map<string, number> {
 
 /** INSTANCE are the labels that scale with the data, each from another rule. */
 const INSTANCE = {
-  "knows": "prp-symp",
+  knows: "prp-symp",
   "type string": "dt-type2",
   "type Literal": "dt-type2",
 };
 
-Deno.test("reference is a subset of Reasoner on plain, gaps attributed", () => {
+test("reference is a subset of Reasoner on plain, gaps attributed", () => {
   const [small, large] = [leftOut(1e3), leftOut(1e4)];
-  for (const [size, missing] of [[1e3, small], [1e4, large]] as const) {
+  for (const [size, missing] of [
+    [1e3, small],
+    [1e4, large],
+  ] as const) {
     // One literal name per person; one symmetric knows per person, less ties.
     assertEquals(missing.get("type string"), size / 5);
     assertEquals(missing.get("type Literal"), size / 5);
