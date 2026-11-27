@@ -18,6 +18,7 @@ this repo's specifics:
   `bun.lock` change.
 - `jsr.json` describes the published package and `package.json` the toolchain;
   `bun run check:manifests` fails when they disagree.
-- `code-health.yml` only warns: files over 120 lines of code (300 for tests) and
-  `TODO`/`FIXME` without an issue link. There are no exclusions.
+- `code-health.yml` fails on a file over 120 lines of code (300 for tests);
+  files that were already over it are listed there with a ceiling that only
+  shrinks. A `TODO`/`FIXME` without an issue link only warns.
 - `.github/CODEOWNERS` routes review to the repo owner.
