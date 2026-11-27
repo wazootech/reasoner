@@ -319,15 +319,15 @@ function stringValue(lexical: string, datatype: string): DatatypeValue | null {
   if (datatype === XSD_NS + "language") {
     if (!isValidLanguageTag(lexical, false)) return null;
   } else if (datatype === XSD_NS + "Name") {
-    if (!/^[:_\p{L}][:_\p{L}\p{N}.\-·̀-ͯ‿-⁀]*$/u.test(lexical)) {
+    if (!/^[:_\p{L}][\u0300-\u036F:_\p{L}\p{N}.\-\u00B7\u203F-\u2040]*$/u.test(lexical)) {
       return null;
     }
   } else if (datatype === XSD_NS + "NCName") {
-    if (!/^[_\p{L}][_\p{L}\p{N}.\-·̀-ͯ‿-⁀]*$/u.test(lexical)) {
+    if (!/^[_\p{L}][\u0300-\u036F_\p{L}\p{N}.\-\u00B7\u203F-\u2040]*$/u.test(lexical)) {
       return null;
     }
   } else if (datatype === XSD_NS + "NMTOKEN") {
-    if (!/^[:_\p{L}\p{N}.\-·̀-ͯ‿-⁀]+$/u.test(lexical)) {
+    if (!/^[\u0300-\u036F:_\p{L}\p{N}.\-\u00B7\u203F-\u2040]+$/u.test(lexical)) {
       return null;
     }
   }

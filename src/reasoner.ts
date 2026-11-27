@@ -466,7 +466,7 @@ class Core {
         queue.push(terms.term(skolem));
       }
     }
-    for (const id of [...ids]) {
+    for (const id of Array.from(ids)) {
       for (const member of equality.members(equality.find(id))) ids.add(member);
     }
     for (const id of ids) if (isHub(terms.term(id))) return undefined;

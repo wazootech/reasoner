@@ -224,7 +224,7 @@ export class Engine {
       this.#delta = new Map();
       this.#clock++;
       for (const rule of this.#rules) {
-        const binding = new Array<number>(rule.slots).fill(UNBOUND);
+        const binding = Array.from({ length: rule.slots }, () => UNBOUND);
         for (const seed of rule.seeds) {
           if (!this.#mayFire(seed)) continue;
           const facts = this.#seedFacts(delta, grouped, seed);
