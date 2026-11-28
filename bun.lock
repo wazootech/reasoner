@@ -64,7 +64,7 @@
 
     "@types/readable-stream": ["@types/readable-stream@4.0.25", "", { "dependencies": { "@types/node": "*" } }, "sha512-7GsxL8Wd5X3jh73/qgW7WCnbBvGSdD8U3E4Jiuus3/8I+PN20DtlkJtwFhr/sImXfDDQ2Z03i/9wNiIF3TVSsw=="],
 
-    "@wazoo/sparql-engine": ["@jsr/wazoo__sparql-engine@0.5.1", "https://npm.jsr.io/~/11/@jsr/wazoo__sparql-engine/0.5.1.tgz", { "dependencies": { "@rdfjs/types": "^2.0.1" } }, "sha512-moFAPS6D61w6gVNLCf+eG5kPhlBrWKzQ6OQMgcWZAqm8GxDH6Z9XMucDhUnX1ugszhaeKkokeJUJmv4tzmKj6Q=="],
+    "@wazoo/sparql-engine": ["@jsr/wazoo__sparql-engine@0.5.4", "https://npm.jsr.io/~/11/@jsr/wazoo__sparql-engine/0.5.4.tgz", { "dependencies": { "@rdfjs/types": "^2.0.1" } }, "sha512-oLY76/L1ffHtw35izwYmM9iLqYx4qXeGeNfNydvU56FDjzw+kW131sgYGztWSTfF3hgpgG1+9HmXoqfQed2eZA=="],
 
     "abort-controller": ["abort-controller@3.0.0", "", { "dependencies": { "event-target-shim": "^5.0.0" } }, "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg=="],
 
